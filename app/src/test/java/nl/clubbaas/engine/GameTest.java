@@ -349,6 +349,38 @@ public class GameTest {
         assertEquals(0, star.suspension);
     }
 
+    // ---- Conditie ---------------------------------------------------------------------
+
+    @Test
+    public void playingCostsFitnessAndRestRestoresIt() {
+        Game g = newGame();
+        Club me = g.human();
+        Player p = MatchEngine.rate(me).eleven().get(0);
+        assertEquals(100, p.fitness());
+        Club opp = g.division(7).clubs.get(0) == me ? g.division(7).clubs.get(1) : g.division(7).clubs.get(0);
+        MatchEngine.play(new Fixture(me, opp, false, 1), new java.util.Random(2), false);
+        assertTrue(p.fitness() < 100);
+        for (int i = 0; i < 5; i++) MatchEngine.recover(me);
+        assertEquals(100, p.fitness());
+    }
+
+    @Test
+    public void tiredStarterIsRestedForCloseAlternative() {
+        Game g = newGame();
+        Club me = g.human();
+        TeamRating r = MatchEngine.rate(me);
+        Player starter = null, reserve = null;
+        for (Player p : r.eleven()) if (p.position == Position.AANVALLER) starter = p;
+        for (Player p : me.squad) if (p.position == Position.AANVALLER && !r.eleven().contains(p)) reserve = p;
+        assertNotNull(starter);
+        assertNotNull(reserve);
+        reserve.skill = starter.skill - 2;
+        starter.fatigue = 60;
+        assertFalse(MatchEngine.rate(me).eleven().contains(starter));
+        starter.fatigue = 0;
+        assertTrue(MatchEngine.rate(me).eleven().contains(starter));
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

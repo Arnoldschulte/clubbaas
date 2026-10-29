@@ -92,7 +92,11 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
    vaker dan aanvallers. Een rode kaart kost tot 30% van de eigen kansen en geeft de
    tegenstander tot 30% meer, afhankelijk van de minuut. Direct rood = 2 wedstrijden schorsing,
    twee keer geel = 1, elke 5e gele kaart in een seizoen = 1.
-5. **Uitslag** via een Poisson-verdeling. Gemiddeld 2,5 goals per wedstrijd, 50% thuiswinst,
+5. **Conditie**: elke wedstrijd kost 16 punten (oudere spelers iets meer), elke week herstelt
+   8 + fysio-sterren + 30% van de vermoeidheid. Met één wedstrijd per week blijft een speler
+   rond 90%; bekerweken hakken erin. Conditie telt tot −15% mee en vermoeide spelers raken
+   eerder geblesseerd. De manager laat vermoeide spelers soms rusten.
+6. **Uitslag** via een Poisson-verdeling. Gemiddeld 2,5 goals per wedstrijd, 50% thuiswinst,
    25% gelijkspel.
 
 Vuistregel: als underdog levert verdedigend spelen gemiddeld zo'n 0,08 punt per wedstrijd op,
@@ -107,8 +111,6 @@ Spelerswaarde en salaris staan in `Player.baseValue()` en `Player.wageFor()`.
 ## Ideeën voor de volgende stap
 
 - Europese toernooien voor de top 3 van de Topdivisie
-- Conditie, zodat roteren loont
-- Gele en rode kaarten met schorsingen
 - Onderhandelen over transfersommen (bod / tegenbod)
 - Bouwtijd voor het stadion (uitbreiding klaar na X weken)
 - Prestaties en een highscorelijst

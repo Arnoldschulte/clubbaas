@@ -19,6 +19,7 @@ public class Player implements Serializable {
     public int appearances;     // dit seizoen
     public int yellowCards;     // dit seizoen
     public int suspension;      // aantal wedstrijden geschorst
+    int fatigue;                // vermoeidheid 0-60; conditie = 100 - vermoeidheid
 
     // Transfermarkt
     public long askingPrice;    // alleen voor spelers op de markt (0 = transfervrij)
@@ -96,6 +97,11 @@ public class Player implements Serializable {
 
     public boolean isInjured() {
         return injuryWeeks > 0;
+    }
+
+    /** Conditie in procenten: 100 = topfit. */
+    public int fitness() {
+        return 100 - fatigue;
     }
 
     public boolean isSuspended() {

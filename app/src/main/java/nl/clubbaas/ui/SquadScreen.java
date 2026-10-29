@@ -72,7 +72,7 @@ public class SquadScreen extends Screen {
                 any = true;
                 String detail = Player.moraleEmoji(p.morale()) + " "
                         + (p.wantsTransfer() ? "📝 wil weg · " : "")
-                        + (p == me.favorite() ? "⭐ " : "") + p.age + " jr · " + Fmt.money(p.wage) + " p/w · "
+                        + (p == me.favorite() ? "⭐ " : "") + "⚡" + p.fitness() + "% · " + p.age + " jr · " + Fmt.money(p.wage) + " p/w · "
                         + contractText(p) + (eleven.contains(p) ? " · basis" : "")
                         + (p.goals > 0 ? " · ⚽ " + p.goals : "")
                         + (p.yellowCards % 5 >= 3 ? " · 🟨 " + p.yellowCards % 5 + "/5" : "");
@@ -116,6 +116,7 @@ public class SquadScreen extends Screen {
                 + "Contract: " + (p.contractYears == 0 ? "loopt af na dit seizoen" : "nog " + p.contractYears + " seizoen(en) na dit seizoen") + "\n"
                 + "Dit seizoen: " + p.appearances + " wedstrijden, " + p.goals + " doelpunten"
                 + (p.isInjured() ? "\nGeblesseerd: nog " + p.injuryWeeks + " week/weken" : "")
+                + "\nConditie: " + p.fitness() + "%" + (p.fitness() < 70 ? " (vermoeid: speelt minder sterk en raakt eerder geblesseerd)" : "")
                 + (p.isSuspended() ? "\nGeschorst: nog " + p.suspension + " wedstrijd(en)" : "")
                 + "\nGele kaarten dit seizoen: " + p.yellowCards + " (bij elke 5e een wedstrijd schorsing)"
                 + extra
@@ -147,7 +148,8 @@ public class SquadScreen extends Screen {
                     + "Speelt hij op eigen kracht, dan zakt de ergernis weer.\n\n"
                     + "Huidige verhouding: " + Game.managerMoodLabel(g.human().managerFrustration()) + ".";
         }
-        msg += "\n\nLet op: de speler die voor hem naar de bank moet, wordt daar niet vrolijk van.";
+        msg += "\n\nLet op: de speler die voor hem naar de bank moet, wordt daar niet vrolijk van. "
+                + "En je voorkeursspeler speelt ook als hij moe is.";
         if (current != null) msg += "\n\nJe huidige voorkeursspeler " + current.name + " wordt dan niet meer voorgetrokken.";
         Ui.confirm(ctx(), "Bemoeien met de opstelling", msg, "Doen", () -> {
             g.setFavorite(p);

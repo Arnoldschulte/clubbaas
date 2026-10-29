@@ -53,14 +53,35 @@ public final class MatchEngine {
         return 1.0 + (p.morale() - Player.BASE_MORALE) / 800.0;
     }
 
+    // Conditie
+    static final int MATCH_FATIGUE = 16;
+    static final int MAX_FATIGUE = 60;
+    static final int BASE_RECOVERY = 8;
+    static final double RECOVERY_SHARE = 0.3;
+
+    /** Effect van conditie: topfit = 100%, bij 40% conditie nog 91%. */
+    public static double fitnessFactor(Player p) {
+        return 0.85 + 0.15 * p.fitness() / 100.0;
+    }
+
+    /** Wat de manager ziet bij het opstellen: vaardigheid, rekening houdend met conditie. */
+    private static double selectionValue(Player p, boolean useFitness) {
+        return useFitness ? p.skill * fitnessFactor(p) : p.skill;
+    }
+
+    static TeamRating rate(Club club, Formation formation, boolean useFavorite) {
+        return rate(club, formation, useFavorite, true);
+    }
+
     /**
      * @param useFavorite false = de opstelling die de manager zelf zou kiezen, zonder bemoeienis
      *                    van de voorzitter (gebruikt om te bepalen wie verwacht te spelen).
+     * @param useFitness  false = conditie negeren (wie is op papier basisspeler?)
      */
-    static TeamRating rate(Club club, Formation formation, boolean useFavorite) {
+    static TeamRating rate(Club club, Formation formation, boolean useFavorite, boolean useFitness) {
         List<Player> fit = new ArrayList<>();
         for (Player p : club.squad) if (p.isAvailable()) fit.add(p);
-        fit.sort(Comparator.comparingInt((Player p) -> -p.skill));
+        fit.sort((x, y) -> Double.compare(selectionValue(y, useFitness), selectionValue(x, useFitness)));
 
         // Voorkeursspeler van de voorzitter: zou de manager hem zelf ook opstellen?
         Player favorite = club.human && useFavorite ? club.favorite() : null;
@@ -109,7 +130,8 @@ public final class MatchEngine {
                     }
                 }
                 double eff = p == null ? EMERGENCY_SKILL
-                        : (p.position == pos ? p.skill : p.skill * OUT_OF_POSITION) * moraleFactor(p);
+                        : (p.position == pos ? p.skill : p.skill * OUT_OF_POSITION) * moraleFactor(p)
+                        * (useFitness ? fitnessFactor(p) : 1.0);
                 def += eff * WEIGHTS[pos.ordinal()][0];
                 att += eff * WEIGHTS[pos.ordinal()][1];
                 defWeight += WEIGHTS[pos.ordinal()][0];
@@ -196,8 +218,8 @@ public final class MatchEngine {
 
         assignGoals(f, homeXI, sentOffHome, f.homeGoals, true, f.homeScorers, rng);
         assignGoals(f, awayXI, sentOffAway, f.awayGoals, false, f.awayScorers, rng);
-        for (Player p : homeXI) p.appearances++;
-        for (Player p : awayXI) p.appearances++;
+        for (Player p : homeXI) addMatchLoad(p);
+        for (Player p : awayXI) addMatchLoad(p);
         applyInjuries(f, f.home, homeXI, true, rng);
         applyInjuries(f, f.away, awayXI, false, rng);
         f.events().sort((x, y) -> x.minute - y.minute);
@@ -212,6 +234,26 @@ public final class MatchEngine {
         // Schorsing uitgezeten
         for (Player p : servingHome) p.suspension--;
         for (Player p : servingAway) p.suspension--;
+    }
+
+    /** Een gespeelde wedstrijd: telt mee als optreden en kost conditie (meer bij oudere spelers). */
+    private static void addMatchLoad(Player p) {
+        p.appearances++;
+        int load = MATCH_FATIGUE + Math.max(0, p.age - 30) / 2;
+        p.fatigue = Math.min(MAX_FATIGUE, p.fatigue + load);
+    }
+
+    /**
+     * Wekelijks herstel: een vast deel plus 30% van de vermoeidheid. Bij één wedstrijd per week
+     * blijft een speler zo rond de 90% conditie; extra (beker)wedstrijden hakken erin.
+     * Een goede fysio laat spelers sneller herstellen.
+     */
+    static void recover(Club club) {
+        int base = BASE_RECOVERY + club.staffRating(StaffRole.FYSIO);
+        for (Player p : club.squad) {
+            int recovery = base + (int) Math.round(p.fatigue * RECOVERY_SHARE);
+            p.fatigue = Math.max(0, p.fatigue - recovery);
+        }
     }
 
     private static List<Player> suspendedPlayers(Club c) {
@@ -308,7 +350,8 @@ public final class MatchEngine {
         int physio = club.staffRating(StaffRole.FYSIO);
         double chance = INJURY_CHANCE * (1.3 - physio * 0.12);
         for (Player p : eleven) {
-            if (rng.nextDouble() < chance) {
+            // Vermoeide spelers raken eerder geblesseerd
+            if (rng.nextDouble() < chance * (1 + p.fatigue / 40.0)) {
                 int weeks = 1 + rng.nextInt(6) - (physio - 1) / 2;
                 p.injuryWeeks = Math.max(1, weeks) + 1; // +1 omdat de teller vóór de volgende ronde zakt
                 f.events().add(new MatchEvent(1 + rng.nextInt(90), MatchEvent.Type.INJURY, home, p.name));

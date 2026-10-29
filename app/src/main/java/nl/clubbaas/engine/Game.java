@@ -160,6 +160,7 @@ public class Game implements Serializable {
                 p.goals = 0;
                 p.appearances = 0;
                 p.yellowCards = 0;
+                p.fatigue = 0; // fris na de zomerstop
             }
         }
         human.ledger.startSeason();
@@ -270,6 +271,9 @@ public class Game implements Serializable {
 
         // Blessures genezen
         for (Club c : allClubs()) for (Player p : c.squad) if (p.injuryWeeks > 0) p.injuryWeeks--;
+
+        // Herstel van vermoeidheid
+        for (Club c : allClubs()) MatchEngine.recover(c);
 
         // Competitie
         for (Division d : divisions) {
@@ -885,7 +889,8 @@ public class Game implements Serializable {
 
     private MoraleContext moraleContext() {
         MoraleContext ctx = new MoraleContext();
-        ctx.naturalEleven.addAll(MatchEngine.rate(human, human.formation(), false).eleven());
+        // Op papier, zonder rotatie door vermoeidheid en zonder bemoeienis van de voorzitter
+        ctx.naturalEleven.addAll(MatchEngine.rate(human, human.formation(), false, false).eleven());
         List<Player> bySkill = new ArrayList<>(human.squad);
         bySkill.sort((a, b) -> b.skill - a.skill);
         for (int i = 0; i < bySkill.size(); i++) ctx.rank.put(bySkill.get(i), i + 1);

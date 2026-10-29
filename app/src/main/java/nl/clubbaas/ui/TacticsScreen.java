@@ -128,7 +128,7 @@ public class TacticsScreen extends Screen {
 
         // Basiself
         LinearLayout xi = Ui.card(c, "Basiself (" + mine.formation.label + ")");
-        xi.addView(Ui.muted(c, "De manager stelt de beste fitte spelers op."));
+        xi.addView(Ui.muted(c, "De manager stelt de beste spelers op en laat vermoeide spelers soms rusten."));
         StringBuilder missing = new StringBuilder();
         for (Player p : me.squad) {
             if (p.isAvailable()) continue;
@@ -153,7 +153,7 @@ public class TacticsScreen extends Screen {
                     : (s.player == favorite ? "⭐ " : "") + s.player.name
                     + (s.player == favorite && mine.favoriteForced ? "  (op jouw verzoek)" : "");
             String right = s.player == null ? "10"
-                    : Player.moraleEmoji(s.player.morale()) + " " + s.player.skill;
+                    : Player.moraleEmoji(s.player.morale()) + " ⚡" + s.player.fitness() + "%  " + s.player.skill;
             LinearLayout kv = Ui.keyValue(c, name + (s.outOfPosition() ? "  (uit positie, 70%)" : ""), right);
             if (s.outOfPosition() || s.player == null) ((TextView) kv.getChildAt(0)).setTextColor(Ui.BAD);
             xi.addView(kv);
