@@ -53,6 +53,18 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
   sneller, en spelers met 8+ wedstrijden staan "in de etalage" (+10% op biedingen). Speelt je
   voorkeursspeler alleen op jouw verzoek, dan ergert de manager zich: +6 plus 3 per ster per
   wedstrijd, −4 bij elke wedstrijd zonder bemoeienis. Bij 100 stapt hij op.
+- **Moraal** (0-100, basis 60) schuift elke week 15% richting een doelwaarde, opgebouwd uit:
+  - *Speeltijd* vergeleken met zijn rol. Reserves verwachten weinig te spelen; wie zijn
+    basisplaats verliest (bijv. door je voorkeursspeler) went daar maar langzaam aan.
+  - *Salaris*: pas bij flinke onderbetaling (minder dan 70% van wat hij nu waard is).
+    Een nieuw contract lost het op. Talenten t/m 20 zijn minder gevoelig.
+  - *Jaloezie*, bewust zeldzaam: alleen vaste basisspelers ouder dan 20, alleen als een
+    ploeggenoot minstens 1,75x zoveel verdient én duidelijk minder presteert (vaardigheid,
+    vaste basisplaats, en voor middenvelders/aanvallers ook doelpunten). Max −4.
+  - *Resultaten* van de laatste vijf wedstrijden, en +5 voor je voorkeursspeler.
+
+  Effect: tot ±5% vaardigheid in wedstrijden. Onder de 25 vraagt een speler een transfer aan
+  (verlengt niet, biedingen −10%). Tevreden spelers verlengen goedkoper, ontevreden duurder.
 - **Inkomsten**: kaartverkoop, horeca & fanshop, sponsor, tv-geld (hogere divisies), prijzengeld.
 - **Uitgaven**: salarissen, staf, uitbreidingen, rente.
 - **Fans** groeien bij winst en promotie; ticketprijs bepaalt hoeveel er komen.
@@ -86,7 +98,7 @@ Spelerswaarde en salaris staan in `Player.baseValue()` en `Player.wageFor()`.
 ## Ideeën voor de volgende stap
 
 - Europese toernooien voor de top 3 van de Topdivisie
-- Conditie en moraal, zodat roteren loont
+- Conditie, zodat roteren loont
 - Gele en rode kaarten met schorsingen
 - Onderhandelen over transfersommen (bod / tegenbod)
 - Bouwtijd voor het stadion (uitbreiding klaar na X weken)

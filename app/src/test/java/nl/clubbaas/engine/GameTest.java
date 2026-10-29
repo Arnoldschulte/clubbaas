@@ -165,6 +165,85 @@ public class GameTest {
         assertNotNull(me.staff.get(StaffRole.MANAGER));
     }
 
+    // ---- Moraal ------------------------------------------------------------------------
+
+    @Test
+    public void starterPushedOutByFavoriteBecomesUnhappy() {
+        Game g = newGame();
+        Club me = g.human();
+        me.staff.remove(StaffRole.MANAGER); // geen manager die opstapt tijdens de test
+        Player bench = weakestPlayer(me);
+        bench.skill = 1;
+        java.util.List<Player> before = MatchEngine.rate(me).eleven();
+        g.setFavorite(bench);
+        java.util.List<Player> after = MatchEngine.rate(me).eleven();
+        Player pushedOut = null;
+        for (Player p : before) if (!after.contains(p)) pushedOut = p;
+        assertNotNull(pushedOut);
+        for (int i = 0; i < 10; i++) {
+            for (Player p : me.squad) p.injuryWeeks = 0;
+            g.advanceWeek();
+        }
+        assertTrue("moraal " + pushedOut.morale(), pushedOut.morale() < 50);
+        assertTrue(g.moraleBreakdown(pushedOut).playingTime <= -15);
+    }
+
+    @Test
+    public void underpaidPlayerIsHappyAgainAfterRenewal() {
+        Game g = newGame();
+        Player p = MatchEngine.rate(g.human()).eleven().get(1);
+        p.wage = 30;
+        assertTrue(g.moraleBreakdown(p).salary < 0);
+        g.human().money = 1_000_000;
+        assertTrue(g.renewContract(p, 2).ok);
+        assertTrue(g.moraleBreakdown(p).salary >= 0);
+    }
+
+    @Test
+    public void higherSalaryIsAcceptedWhenTeammateIsBetter() {
+        Game g = newGame();
+        Club me = g.human();
+        java.util.List<Player> xi = MatchEngine.rate(me).eleven();
+        Player a = xi.get(1);
+        Player b = null; // een aanvaller: bij hem tellen doelpunten mee als prestatie
+        for (Player p : xi) if (p.position == Position.AANVALLER) b = p;
+        assertNotNull(b);
+        a.age = 26;
+        b.wage = a.wage * 3;
+
+        b.skill = a.skill + 5; // beter: salaris gegund
+        assertEquals(0, g.moraleBreakdown(a).jealousy);
+
+        b.skill = Math.max(1, a.skill - 12); // duidelijk slechter en scoort niet
+        b.goals = 0;
+        assertTrue(g.moraleBreakdown(a).jealousy < 0);
+
+        b.goals = 20; // maar als hij volop scoort, wordt het hem eerder gegund
+        b.skill = a.skill - 4;
+        assertEquals(0, g.moraleBreakdown(a).jealousy);
+    }
+
+    @Test
+    public void veryUnhappyPlayerAsksForTransferAndRefusesToRenew() {
+        Game g = newGame();
+        Player p = g.human().squad.get(3);
+        p.moraleDelta = -55;
+        g.advanceWeek();
+        assertTrue(p.wantsTransfer());
+        g.human().money = 1_000_000;
+        assertFalse(g.renewContract(p, 2).ok);
+    }
+
+    @Test
+    public void moraleAffectsTeamStrength() {
+        Club me = newGame().human();
+        double neutral = MatchEngine.strength(me);
+        for (Player p : me.squad) p.moraleDelta = 40;
+        assertTrue(MatchEngine.strength(me) > neutral);
+        for (Player p : me.squad) p.moraleDelta = -50;
+        assertTrue(MatchEngine.strength(me) < neutral);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

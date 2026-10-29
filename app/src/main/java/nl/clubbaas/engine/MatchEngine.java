@@ -43,12 +43,25 @@ public final class MatchEngine {
     }
 
     public static TeamRating rate(Club club, Formation formation) {
+        return rate(club, formation, true);
+    }
+
+    /** Effect van moraal op de vaardigheid in een wedstrijd: van ongeveer −7,5% tot +5%. */
+    public static double moraleFactor(Player p) {
+        return 1.0 + (p.morale() - Player.BASE_MORALE) / 800.0;
+    }
+
+    /**
+     * @param useFavorite false = de opstelling die de manager zelf zou kiezen, zonder bemoeienis
+     *                    van de voorzitter (gebruikt om te bepalen wie verwacht te spelen).
+     */
+    static TeamRating rate(Club club, Formation formation, boolean useFavorite) {
         List<Player> fit = new ArrayList<>();
         for (Player p : club.squad) if (!p.isInjured()) fit.add(p);
         fit.sort(Comparator.comparingInt((Player p) -> -p.skill));
 
         // Voorkeursspeler van de voorzitter: zou de manager hem zelf ook opstellen?
-        Player favorite = club.human ? club.favorite() : null;
+        Player favorite = club.human && useFavorite ? club.favorite() : null;
         if (favorite != null && favorite.isInjured()) favorite = null;
         boolean forced = false;
         if (favorite != null) {
@@ -94,7 +107,7 @@ public final class MatchEngine {
                     }
                 }
                 double eff = p == null ? EMERGENCY_SKILL
-                        : p.position == pos ? p.skill : p.skill * OUT_OF_POSITION;
+                        : (p.position == pos ? p.skill : p.skill * OUT_OF_POSITION) * moraleFactor(p);
                 def += eff * WEIGHTS[pos.ordinal()][0];
                 att += eff * WEIGHTS[pos.ordinal()][1];
                 defWeight += WEIGHTS[pos.ordinal()][0];

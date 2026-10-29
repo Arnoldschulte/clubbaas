@@ -21,6 +21,15 @@ public class Player implements Serializable {
     // Transfermarkt
     public long askingPrice;    // alleen voor spelers op de markt (0 = transfervrij)
 
+    // Moraal (alleen bijgehouden voor de eigen club). Opgeslagen als afwijking van 60,
+    // zodat oude savegames (waar alles 0 is) netjes op 60 beginnen.
+    public static final int BASE_MORALE = 60;
+    int moraleDelta;
+    float playShare;          // voortschrijdend gemiddelde: deel van de wedstrijden dat hij speelde
+    float expectation;        // welk deel hij verwacht te spelen; zakt langzaam na verlies van basisplaats
+    boolean moraleInit;
+    boolean transferRequested;
+
     // Verkoopbod dat deze week is gedaan (zodat je niet eindeloos opnieuw kunt vragen)
     long saleOffer;
     int saleOfferWeekKey = -1;
@@ -56,6 +65,31 @@ public class Player implements Serializable {
         else v *= 0.35;
         long rounded = v >= 100_000 ? Math.round(v / 5000.0) * 5000 : Math.round(v / 500.0) * 500;
         return Math.max(500, rounded);
+    }
+
+    /** Moraal van 0 (woedend) tot 100 (dolgelukkig). */
+    public int morale() {
+        return Math.max(0, Math.min(100, BASE_MORALE + moraleDelta));
+    }
+
+    public boolean wantsTransfer() {
+        return transferRequested;
+    }
+
+    public static String moraleLabel(int morale) {
+        if (morale >= 75) return "Dolblij";
+        if (morale >= 55) return "Tevreden";
+        if (morale >= 40) return "Neutraal";
+        if (morale >= 25) return "Ontevreden";
+        return "Boos";
+    }
+
+    public static String moraleEmoji(int morale) {
+        if (morale >= 75) return "😀";
+        if (morale >= 55) return "🙂";
+        if (morale >= 40) return "😐";
+        if (morale >= 25) return "🙁";
+        return "😠";
     }
 
     public boolean isInjured() {

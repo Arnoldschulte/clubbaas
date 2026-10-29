@@ -141,7 +141,8 @@ public class TacticsScreen extends Screen {
             String name = s.player == null ? "— noodspeler (te weinig fitte spelers)"
                     : (s.player == favorite ? "⭐ " : "") + s.player.name
                     + (s.player == favorite && mine.favoriteForced ? "  (op jouw verzoek)" : "");
-            String right = s.player == null ? "10" : String.valueOf(s.player.skill);
+            String right = s.player == null ? "10"
+                    : Player.moraleEmoji(s.player.morale()) + " " + s.player.skill;
             LinearLayout kv = Ui.keyValue(c, name + (s.outOfPosition() ? "  (uit positie, 70%)" : ""), right);
             if (s.outOfPosition() || s.player == null) ((TextView) kv.getChildAt(0)).setTextColor(Ui.BAD);
             xi.addView(kv);

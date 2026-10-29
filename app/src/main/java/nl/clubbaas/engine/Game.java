@@ -4,8 +4,12 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * De volledige spelwereld en alle spelregels. Deze klasse heeft geen Android-afhankelijkheden,
@@ -250,6 +254,8 @@ public class Game implements Serializable {
 
         week++;
         human.ledger.startWeek();
+        Map<Integer, Integer> appearancesBefore = new HashMap<>();
+        for (Player p : human.squad) appearancesBefore.put(p.id, p.appearances);
 
         // Blessures genezen
         for (Club c : allClubs()) for (Player p : c.squad) if (p.injuryWeeks > 0) p.injuryWeeks--;
@@ -298,6 +304,7 @@ public class Game implements Serializable {
             }
         }
 
+        updateMorale(appearancesBefore);
         weeklyFinances();
         weeklyMarketRefresh();
         if (week % 4 == 1) refreshCandidates();
@@ -632,6 +639,9 @@ public class Game implements Serializable {
         p.contractYears = 1 + rng.nextInt(3);
         p.goals = 0;
         p.appearances = 0;
+        p.moraleDelta = 10;       // enthousiast over zijn nieuwe club
+        p.moraleInit = false;     // speeltijd begint bij de verwachting voor zijn rol
+        p.transferRequested = false;
         human.squad.add(p);
         addNews(p.name + " tekent bij " + human.name + " voor " + Fmt.money(cost) + ".");
         return ActionResult.ok(p.name + " is jouw nieuwe aanwinst!");
@@ -643,6 +653,7 @@ public class Game implements Serializable {
         if (p.saleOfferWeekKey != key) {
             double f = 0.7 + rng.nextDouble() * 0.45;
             if (isShowcased(p)) f *= 1.10;
+            if (p.transferRequested) f *= 0.90; // iedereen weet dat hij weg wil
             p.saleOffer = Math.max(500, Math.round(p.value() * f / 500.0) * 500);
             p.saleOfferWeekKey = key;
         }
@@ -673,8 +684,11 @@ public class Game implements Serializable {
         return ActionResult.ok(p.name + " vertrekt naar " + buyer.name + ".");
     }
 
+    /** Tevreden spelers verlengen goedkoper, ontevreden spelers vragen meer. */
     public int renewalWage(Player p) {
-        return (int) (Math.round(Player.wageFor(p.skill, p.age) * 1.1 / 10.0) * 10);
+        int m = p.morale();
+        double factor = m >= 75 ? 1.0 : m < 40 ? 1.25 : 1.1;
+        return (int) (Math.round(Player.wageFor(p.skill, p.age) * factor / 10.0) * 10);
     }
 
     public long renewalBonus(Player p) {
@@ -683,12 +697,14 @@ public class Game implements Serializable {
 
     public ActionResult renewContract(Player p, int years) {
         if (!human.squad.contains(p)) return ActionResult.fail("Speler zit niet in je selectie.");
+        if (p.transferRequested) return ActionResult.fail(p.name + " wil weg en weigert te verlengen.");
         if (p.age >= 34 && years > 1) return ActionResult.fail(p.name + " wil op zijn leeftijd alleen nog voor 1 jaar tekenen.");
         long bonus = renewalBonus(p);
         if (human.money < bonus) return ActionResult.fail("Te weinig geld voor de tekenpremie (" + Fmt.money(bonus) + ").");
         addMoney("Tekengeld", -bonus);
         p.wage = renewalWage(p);
         p.contractYears = years;
+        p.moraleDelta = Math.min(40, p.moraleDelta + 10); // nieuw contract = blije speler
         return ActionResult.ok(p.name + " verlengt met " + years + " jaar, salaris " + Fmt.money(p.wage) + " p/w.");
     }
 
@@ -765,6 +781,174 @@ public class Game implements Serializable {
             addNews(msg);
             rep.messages.add(msg);
         }
+    }
+
+    // ---- Moraal -----------------------------------------------------------------------
+
+    /** Hoeveel procent van het verschil met de doelmoraal er per week wordt ingelopen. */
+    private static final double MORALE_ADJUST_RATE = 0.15;
+    public static final int TRANSFER_REQUEST_BELOW = 25;
+    private static final int TRANSFER_REQUEST_WITHDRAW_ABOVE = 45;
+
+    /** Gegevens die voor alle spelers gelijk zijn, één keer per week berekend. */
+    private static final class MoraleContext {
+        final Set<Player> naturalEleven = new HashSet<>();
+        final Map<Player, Integer> rank = new HashMap<>();
+        Player favorite;
+        double pointsPerMatch = -1; // -1 = nog geen wedstrijden
+    }
+
+    private MoraleContext moraleContext() {
+        MoraleContext ctx = new MoraleContext();
+        ctx.naturalEleven.addAll(MatchEngine.rate(human, human.formation(), false).eleven());
+        List<Player> bySkill = new ArrayList<>(human.squad);
+        bySkill.sort((a, b) -> b.skill - a.skill);
+        for (int i = 0; i < bySkill.size(); i++) ctx.rank.put(bySkill.get(i), i + 1);
+        ctx.favorite = human.favorite();
+        List<Fixture> played = new ArrayList<>();
+        for (Fixture f : humanDivision().fixturesOf(human)) if (f.played) played.add(f);
+        if (!played.isEmpty()) {
+            int points = 0, n = 0;
+            for (int i = Math.max(0, played.size() - 5); i < played.size(); i++, n++) {
+                String r = played.get(i).resultFor(human);
+                points += r.equals("W") ? 3 : r.equals("G") ? 1 : 0;
+            }
+            ctx.pointsPerMatch = points / (double) n;
+        }
+        return ctx;
+    }
+
+    /**
+     * Welk deel van de wedstrijden zijn huidige rol rechtvaardigt. De manager speelt altijd met
+     * zijn beste elf, dus reserves weten dat ze weinig spelen en verwachten dat ook niet.
+     */
+    private static double roleExpectation(Player p, MoraleContext ctx) {
+        double expected;
+        if (ctx.naturalEleven.contains(p)) expected = 0.9;
+        else if (ctx.rank.getOrDefault(p, 99) <= 16) expected = 0.1;
+        else expected = 0.05;
+        if (p.age <= 20) expected = Math.min(expected, 0.25); // talenten zijn blij met elke kans
+        return expected;
+    }
+
+    private static double share(Player p, MoraleContext ctx) {
+        return p.moraleInit ? p.playShare : roleExpectation(p, ctx);
+    }
+
+    private static double expectation(Player p, MoraleContext ctx) {
+        return p.moraleInit ? p.expectation : roleExpectation(p, ctx);
+    }
+
+    /** Hoe goed een ploeggenoot presteert, gebruikt om te bepalen of een hoger salaris 'verdiend' is. */
+    private static double performance(Player t, MoraleContext ctx) {
+        double perf = t.skill;
+        if (share(t, ctx) >= 0.6) perf += 3; // vaste basisspeler
+        if (t.position == Position.AANVALLER || t.position == Position.MIDDENVELDER) {
+            perf += Math.min(5, t.goals * 0.5);
+        }
+        return perf;
+    }
+
+    public MoraleBreakdown moraleBreakdown(Player p) {
+        return moraleBreakdown(p, moraleContext());
+    }
+
+    private MoraleBreakdown moraleBreakdown(Player p, MoraleContext ctx) {
+        MoraleBreakdown b = new MoraleBreakdown();
+
+        // Speeltijd vergeleken met wat hij verwacht
+        double diff = share(p, ctx) - expectation(p, ctx);
+        b.playingTime = (int) Math.round(Math.max(-25, Math.min(10, diff * 40)));
+        if (b.playingTime <= -5) b.reasons.add("Speelt minder dan hij verwacht");
+        else if (b.playingTime >= 3) b.reasons.add("Blij met zijn speeltijd");
+
+        // Salaris vergeleken met wat hij nu waard is (pas bij flinke onderbetaling)
+        double ratio = p.wage / (double) Player.wageFor(p.skill, p.age);
+        double s = 0;
+        if (ratio < 0.7) s = -Math.min(15, (0.7 - ratio) * 40);
+        else if (ratio > 1.3) s = Math.min(4, (ratio - 1.3) * 8);
+        if (p.age <= 20 && s < 0) s /= 2;
+        b.salary = (int) Math.round(s);
+        if (b.salary <= -2) b.reasons.add("Voelt zich onderbetaald");
+        else if (b.salary >= 2) b.reasons.add("Tevreden met zijn salaris");
+
+        // Jaloezie, bewust streng: alleen vaste basisspelers die ook echt veel spelen, en alleen
+        // als een ploeggenoot minstens 1,75x zoveel verdient én duidelijk minder presteert.
+        // Een ploeggenoot die beter is, vast speelt of scoort, krijgt zijn salaris gegund.
+        // Talenten t/m 20 jaar zijn vooral blij dat ze spelen en kijken (nog) niet naar salarissen.
+        if (p.age > 20 && ctx.naturalEleven.contains(p) && share(p, ctx) >= 0.6) {
+            for (Player t : human.squad) {
+                if (t == p) continue;
+                if (t.wage >= p.wage * 1.75 && performance(t, ctx) + 2 < p.skill) b.jealousOf.add(t.name);
+            }
+            b.jealousy = -Math.min(4, 2 * b.jealousOf.size());
+            if (!b.jealousOf.isEmpty()) {
+                b.reasons.add("Jaloers op " + String.join(", ", b.jealousOf)
+                        + " (verdient veel meer, presteert niet beter)");
+            }
+        }
+
+        // Teamresultaten van de laatste vijf competitiewedstrijden
+        if (ctx.pointsPerMatch >= 0) {
+            b.results = (int) Math.round(Math.max(-7, Math.min(8, (ctx.pointsPerMatch - 1.4) * 5)));
+            if (b.results <= -2) b.reasons.add("Slechte resultaten drukken de sfeer");
+            else if (b.results >= 2) b.reasons.add("Goede resultaten geven vertrouwen");
+        }
+
+        if (p == ctx.favorite) {
+            b.favorite = 5;
+            b.reasons.add("Voelt het vertrouwen van de voorzitter");
+        }
+
+        int t = Player.BASE_MORALE + b.playingTime + b.salary + b.jealousy + b.results + b.favorite;
+        b.target = Math.max(5, Math.min(95, t));
+        if (b.reasons.isEmpty()) b.reasons.add("Niets bijzonders");
+        return b;
+    }
+
+    /** Wekelijks: speeltijd bijwerken en moraal 15% richting de doelwaarde schuiven. */
+    private void updateMorale(Map<Integer, Integer> appearancesBefore) {
+        MoraleContext ctx = moraleContext();
+        for (Player p : human.squad) {
+            double role = roleExpectation(p, ctx);
+            if (!p.moraleInit) {
+                p.playShare = (float) role;
+                p.expectation = (float) role;
+                p.moraleInit = true;
+            } else if (role > p.expectation) {
+                p.expectation = (float) role;                          // nieuwe basisplaats: meteen
+            } else {
+                p.expectation += (float) ((role - p.expectation) * 0.1); // basisplaats kwijt: langzaam wennen
+            }
+            Integer before = appearancesBefore.get(p.id);
+            if (before != null && !p.isInjured()) {
+                boolean played = p.appearances > before;
+                p.playShare = 0.8f * p.playShare + 0.2f * (played ? 1f : 0f);
+            }
+        }
+        for (Player p : human.squad) {
+            MoraleBreakdown b = moraleBreakdown(p, ctx);
+            int m = p.morale();
+            int next = m + (int) Math.round((b.target - m) * MORALE_ADJUST_RATE);
+            p.moraleDelta = next - Player.BASE_MORALE;
+
+            if (!p.transferRequested && p.morale() < TRANSFER_REQUEST_BELOW) {
+                p.transferRequested = true;
+                addNews(p.name + " is ontevreden en vraagt om een transfer. Reden: "
+                        + b.reasons.get(0).toLowerCase(Fmt.NL) + ".");
+            } else if (p.transferRequested && p.morale() > TRANSFER_REQUEST_WITHDRAW_ABOVE) {
+                p.transferRequested = false;
+                addNews(p.name + " trekt zijn transferverzoek in.");
+            }
+        }
+    }
+
+    /** Gemiddelde moraal van de selectie. */
+    public int squadMorale() {
+        if (human.squad.isEmpty()) return Player.BASE_MORALE;
+        int t = 0;
+        for (Player p : human.squad) t += p.morale();
+        return Math.round(t / (float) human.squad.size());
     }
 
     // ---- Tactiek ----------------------------------------------------------------------

@@ -12,6 +12,7 @@ import nl.clubbaas.engine.Club;
 import nl.clubbaas.engine.Fmt;
 import nl.clubbaas.engine.Game;
 import nl.clubbaas.engine.MatchEngine;
+import nl.clubbaas.engine.MoraleBreakdown;
 import nl.clubbaas.engine.Player;
 import nl.clubbaas.engine.Position;
 import nl.clubbaas.engine.Staff;
@@ -46,6 +47,16 @@ public class SquadScreen extends Screen {
             }
             summary.addView(mood);
         }
+        int squadMorale = game().squadMorale();
+        summary.addView(Ui.keyValue(c, "Sfeer in de selectie",
+                Player.moraleEmoji(squadMorale) + " " + Player.moraleLabel(squadMorale)));
+        int unhappy = 0;
+        for (Player p : me.squad) if (p.wantsTransfer()) unhappy++;
+        if (unhappy > 0) {
+            LinearLayout req = Ui.keyValue(c, "Transferverzoeken", String.valueOf(unhappy));
+            ((android.widget.TextView) req.getChildAt(1)).setTextColor(Ui.BAD);
+            summary.addView(req);
+        }
         summary.addView(Ui.muted(c, "Tik op een speler voor acties. De beste elf wordt automatisch opgesteld in je "
                 + "formatie (" + me.formation().label + "); die kies je bij Tactiek."));
         root.addView(summary);
@@ -59,7 +70,9 @@ public class SquadScreen extends Screen {
                 if (p.position != pos) continue;
                 if (any) card.addView(Ui.divider(c));
                 any = true;
-                String detail = (p == me.favorite() ? "⭐ " : "") + p.age + " jr · " + Fmt.money(p.wage) + " p/w · "
+                String detail = Player.moraleEmoji(p.morale()) + " "
+                        + (p.wantsTransfer() ? "📝 wil weg · " : "")
+                        + (p == me.favorite() ? "⭐ " : "") + p.age + " jr · " + Fmt.money(p.wage) + " p/w · "
                         + contractText(p) + (eleven.contains(p) ? " · basis" : "")
                         + (p.goals > 0 ? " · ⚽ " + p.goals : "");
                 card.addView(PlayerRow.create(c, p, detail, v -> showPlayer(p)));
@@ -85,6 +98,16 @@ public class SquadScreen extends Screen {
                     .append("/").append(Game.PLAYING_TIME_BONUS_APPS)
                     .append(" wedstrijden voor extra ontwikkeling dit seizoen.");
         }
+        MoraleBreakdown mb = g.moraleBreakdown(p);
+        StringBuilder morale = new StringBuilder("\n\nMoraal: ")
+                .append(p.morale()).append(" ").append(Player.moraleEmoji(p.morale())).append(" ")
+                .append(Player.moraleLabel(p.morale()));
+        int trend = Integer.compare(mb.target, p.morale());
+        if (trend != 0) morale.append(trend > 0 ? "  ↗ stijgend" : "  ↘ dalend");
+        for (String reason : mb.reasons) morale.append("\n• ").append(reason);
+        if (p.wantsTransfer()) {
+            morale.append("\n📝 Heeft een transferverzoek ingediend: verlengt niet en biedingen liggen 10% lager.");
+        }
         String info = p.position.label + ", " + p.age + " jaar\n"
                 + "Vaardigheid: " + p.skill + "  (potentie: " + (p.age <= 24 ? String.valueOf(p.potential) : "bereikt") + ")\n"
                 + "Marktwaarde: " + Fmt.money(p.value()) + "\n"
@@ -92,7 +115,8 @@ public class SquadScreen extends Screen {
                 + "Contract: " + (p.contractYears == 0 ? "loopt af na dit seizoen" : "nog " + p.contractYears + " seizoen(en) na dit seizoen") + "\n"
                 + "Dit seizoen: " + p.appearances + " wedstrijden, " + p.goals + " doelpunten"
                 + (p.isInjured() ? "\nGeblesseerd: nog " + p.injuryWeeks + " week/weken" : "")
-                + extra;
+                + extra
+                + morale;
         Ui.actionDialog(c, p.name, info,
                 new String[]{isFavorite ? "Niet meer voortrekken" : "⭐ Vraag de manager hem te laten starten",
                         "Verkopen", "Contract verlengen", "Contract ontbinden"},
@@ -120,6 +144,7 @@ public class SquadScreen extends Screen {
                     + "Speelt hij op eigen kracht, dan zakt de ergernis weer.\n\n"
                     + "Huidige verhouding: " + Game.managerMoodLabel(g.human().managerFrustration()) + ".";
         }
+        msg += "\n\nLet op: de speler die voor hem naar de bank moet, wordt daar niet vrolijk van.";
         if (current != null) msg += "\n\nJe huidige voorkeursspeler " + current.name + " wordt dan niet meer voorgetrokken.";
         Ui.confirm(ctx(), "Bemoeien met de opstelling", msg, "Doen", () -> {
             g.setFavorite(p);

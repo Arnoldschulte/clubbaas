@@ -88,6 +88,10 @@ public class HomeScreen extends Screen {
         status.addView(Ui.keyValue(c, "Fans", Fmt.number(me.fans)));
         status.addView(Ui.keyValue(c, "Teamsterkte", String.valueOf(Math.round(MatchEngine.strength(me)))));
         status.addView(Ui.keyValue(c, Cup.NAME, g.humanCupResult()));
+        int squadMorale = g.squadMorale();
+        status.addView(Ui.keyValue(c, "Sfeer in de selectie",
+                nl.clubbaas.engine.Player.moraleEmoji(squadMorale) + " "
+                        + nl.clubbaas.engine.Player.moraleLabel(squadMorale)));
         if (me.managerFrustration() >= Game.FRUSTRATION_WARNING) {
             TextView warn = Ui.text(c, "⚠ De manager ergert zich aan je bemoeienis ("
                     + Game.managerMoodLabel(me.managerFrustration()).toLowerCase(Fmt.NL) + ")", 14, Ui.BAD, true);
