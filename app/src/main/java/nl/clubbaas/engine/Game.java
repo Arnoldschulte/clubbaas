@@ -229,7 +229,7 @@ public class Game implements Serializable {
         double factor = Math.pow(FAIR_PRICE[human.level - 1] / (double) Math.max(1, price), 1.5);
         factor = Math.max(0.15, Math.min(1.4, factor));
         int demand = (int) (human.fans * factor);
-        return Math.min(human.stadium.capacity, demand);
+        return Math.min(human.stadium.effectiveCapacity(), demand);
     }
 
     // ---- De speelweek ------------------------------------------------------------------
@@ -305,6 +305,7 @@ public class Game implements Serializable {
         }
 
         updateMorale(appearancesBefore);
+        progressConstruction(rep);
         weeklyFinances();
         weeklyMarketRefresh();
         if (week % 4 == 1) refreshCandidates();
@@ -328,7 +329,7 @@ public class Game implements Serializable {
 
     private void collectGate(Fixture f) {
         int attendance = expectedAttendance(human.stadium.ticketPrice);
-        if (f.cup) attendance = Math.min(human.stadium.capacity, (int) (attendance * 1.15));
+        if (f.cup) attendance = Math.min(human.stadium.effectiveCapacity(), (int) (attendance * 1.15));
         f.attendance = attendance;
         human.lastAttendance = attendance;
         addMoney("Kaartverkoop", (long) attendance * human.stadium.ticketPrice);
@@ -1039,15 +1040,34 @@ public class Game implements Serializable {
 
     // ---- Stadion ----------------------------------------------------------------------
 
+    /** Start de bouw van een nieuwe tribune. Je betaalt direct; de plaatsen komen er na de bouwtijd bij. */
     public ActionResult expandStadium() {
         Stadium s = human.stadium;
+        if (s.isUnderConstruction()) {
+            return ActionResult.fail("Er wordt al gebouwd, nog " + s.constructionWeeksLeft + " week/weken.");
+        }
         long cost = s.expansionCost();
         if (human.money < cost) return ActionResult.fail("Te weinig geld. Nodig: " + Fmt.money(cost));
         int seats = s.nextExpansionSeats();
         addMoney("Stadion", -cost);
-        s.capacity += seats;
-        addNews("Stadion uitgebreid met " + Fmt.number(seats) + " plaatsen. Capaciteit: " + Fmt.number(s.capacity) + ".");
-        return ActionResult.ok("+" + Fmt.number(seats) + " plaatsen!");
+        s.constructionSeats = seats;
+        s.constructionWeeksLeft = Stadium.buildWeeks(seats);
+        addNews("Bouw gestart: " + Fmt.number(seats) + " extra plaatsen, klaar over "
+                + s.constructionWeeksLeft + " weken. Tijdens de bouw is een deel van het stadion dicht.");
+        return ActionResult.ok("Bouw gestart, klaar over " + s.constructionWeeksLeft + " weken.");
+    }
+
+    private void progressConstruction(WeekReport rep) {
+        Stadium s = human.stadium;
+        if (!s.isUnderConstruction()) return;
+        s.constructionWeeksLeft--;
+        if (s.constructionWeeksLeft == 0) {
+            s.capacity += s.constructionSeats;
+            String msg = "De nieuwe tribune is klaar! Capaciteit: " + Fmt.number(s.capacity) + " plaatsen.";
+            s.constructionSeats = 0;
+            addNews(msg);
+            rep.messages.add(msg);
+        }
     }
 
     public enum Facility { COMMERCIEEL, TRAINING, JEUGD }

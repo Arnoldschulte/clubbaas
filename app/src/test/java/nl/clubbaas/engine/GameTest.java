@@ -244,6 +244,28 @@ public class GameTest {
         assertTrue(MatchEngine.strength(me) < neutral);
     }
 
+    // ---- Stadion -----------------------------------------------------------------------
+
+    @Test
+    public void stadiumExpansionTakesWeeksAndReducesCapacityMeanwhile() {
+        Game g = newGame();
+        Stadium s = g.human().stadium;
+        g.human().money = 1_000_000;
+        int before = s.capacity;
+        int seats = s.nextExpansionSeats();
+        assertTrue(g.expandStadium().ok);
+        assertEquals(before, s.capacity);
+        assertTrue(s.effectiveCapacity() < before);
+        assertFalse(g.expandStadium().ok); // niet twee bouwprojecten tegelijk
+        int weeks = Stadium.buildWeeks(seats);
+        for (int i = 0; i < weeks - 1; i++) g.advanceWeek();
+        assertTrue(s.isUnderConstruction());
+        g.advanceWeek();
+        assertFalse(s.isUnderConstruction());
+        assertEquals(before + seats, s.capacity);
+        assertEquals(s.capacity, s.effectiveCapacity());
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

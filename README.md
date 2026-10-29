@@ -65,6 +65,8 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 
   Effect: tot ±5% vaardigheid in wedstrijden. Onder de 25 vraagt een speler een transfer aan
   (verlengt niet, biedingen −10%). Tevreden spelers verlengen goedkoper, ontevreden duurder.
+- **Stadion uitbreiden** kost tijd: 3 weken plus 1 week per 1.000 plaatsen. Tijdens de bouw
+  is 10% van het stadion afgesloten.
 - **Inkomsten**: kaartverkoop, horeca & fanshop, sponsor, tv-geld (hogere divisies), prijzengeld.
 - **Uitgaven**: salarissen, staf, uitbreidingen, rente.
 - **Fans** groeien bij winst en promotie; ticketprijs bepaalt hoeveel er komen.

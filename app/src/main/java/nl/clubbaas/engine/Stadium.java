@@ -13,6 +13,26 @@ public class Stadium implements Serializable {
     public int trainingLevel = 0;   // trainingscomplex
     public int youthLevel = 0;      // jeugdacademie
 
+    // Bouw van een nieuwe tribune (0 = niets in aanbouw)
+    public int constructionWeeksLeft;
+    public int constructionSeats;
+    /** Tijdens de bouw is een deel van het stadion afgesloten. */
+    public static final double CONSTRUCTION_CAPACITY_FACTOR = 0.9;
+
+    public boolean isUnderConstruction() {
+        return constructionWeeksLeft > 0;
+    }
+
+    /** Capaciteit die nu echt beschikbaar is. */
+    public int effectiveCapacity() {
+        return isUnderConstruction() ? (int) (capacity * CONSTRUCTION_CAPACITY_FACTOR) : capacity;
+    }
+
+    /** Bouwtijd in weken: grotere tribunes duren langer. */
+    public static int buildWeeks(int seats) {
+        return 3 + seats / 1000;
+    }
+
     /** Hoeveel stoelen de volgende uitbreiding oplevert. */
     public int nextExpansionSeats() {
         if (capacity < 5_000) return 500;

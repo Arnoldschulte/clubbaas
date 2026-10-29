@@ -31,7 +31,8 @@ public class StadiumScreen extends Screen {
 
         // Kaartverkoop
         LinearLayout tickets = Ui.card(c, "Kaartverkoop");
-        tickets.addView(Ui.keyValue(c, "Capaciteit", Fmt.number(s.capacity)));
+        tickets.addView(Ui.keyValue(c, "Capaciteit", Fmt.number(s.effectiveCapacity())
+                + (s.isUnderConstruction() ? " (bouw)" : "")));
         tickets.addView(Ui.keyValue(c, "Fans", Fmt.number(g.human().fans)));
         tickets.addView(Ui.keyValue(c, "Laatste thuiswedstrijd", Fmt.number(g.human().lastAttendance) + " toeschouwers"));
 
@@ -56,14 +57,22 @@ public class StadiumScreen extends Screen {
 
         // Uitbreiden
         LinearLayout expand = Ui.card(c, "Tribunes");
-        expand.addView(Ui.body(c, "Bouw " + Fmt.number(s.nextExpansionSeats()) + " extra plaatsen voor "
-                + Fmt.money(s.expansionCost()) + "."));
-        if (expected >= s.capacity) {
-            TextView full = Ui.text(c, "Je stadion zit vol! Uitbreiden levert direct meer op.", 14, Ui.GOOD, true);
-            full.setPadding(0, Ui.dp(c, 6), 0, 0);
-            expand.addView(full);
+        if (s.isUnderConstruction()) {
+            expand.addView(Ui.text(c, "🏗 In aanbouw: +" + Fmt.number(s.constructionSeats) + " plaatsen", 16, Ui.TEXT, true));
+            expand.addView(Ui.body(c, "Klaar over " + s.constructionWeeksLeft + " week/weken. Tot die tijd is "
+                    + Math.round((1 - Stadium.CONSTRUCTION_CAPACITY_FACTOR) * 100)
+                    + "% van het stadion afgesloten (" + Fmt.number(s.effectiveCapacity()) + " plaatsen beschikbaar)."));
+        } else {
+            expand.addView(Ui.body(c, "Bouw " + Fmt.number(s.nextExpansionSeats()) + " extra plaatsen voor "
+                    + Fmt.money(s.expansionCost()) + ". Bouwtijd: " + Stadium.buildWeeks(s.nextExpansionSeats())
+                    + " weken, waarin een deel van het stadion dicht is."));
+            if (expected >= s.capacity) {
+                TextView full = Ui.text(c, "Je stadion zit vol! Uitbreiden levert straks meer op.", 14, Ui.GOOD, true);
+                full.setPadding(0, Ui.dp(c, 6), 0, 0);
+                expand.addView(full);
+            }
+            expand.addView(Ui.button(c, "Bouw starten", v -> act(g.expandStadium())));
         }
-        expand.addView(Ui.button(c, "Uitbreiden", v -> act(g.expandStadium())));
         root.addView(expand);
 
         // Faciliteiten
