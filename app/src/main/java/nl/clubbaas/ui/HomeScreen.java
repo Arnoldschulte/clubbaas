@@ -92,6 +92,11 @@ public class HomeScreen extends Screen {
                 cup.setPadding(0, Ui.dp(c, 8), 0, 0);
                 next.addView(cup);
             }
+            if (g.nextWeekHasEuropeMatch()) {
+                TextView eu = Ui.text(c, "🌍 Deze week ook Europees voetbal (" + Game.EUROPE_NAME + ")", 14, Ui.PRIMARY, true);
+                eu.setPadding(0, Ui.dp(c, 8), 0, 0);
+                next.addView(eu);
+            }
             next.addView(Ui.button(c, "Speel week " + (g.week() + 1), v -> playWeek()));
             next.addView(Ui.secondaryButton(c, "Speel rest van het seizoen", v ->
                     Ui.confirm(c, "Doorspelen", "Alle resterende weken worden gespeeld zonder tussenstops. "
@@ -185,10 +190,18 @@ public class HomeScreen extends Screen {
         } else if (r.newSeasonStarted) {
             Ui.info(ctx(), "Nieuw seizoen", join(r.messages));
         } else if (game().isLiveEnabled() && r.leagueMatch != null) {
+            // Alle eigen wedstrijden van deze week na elkaar live, daarna het verslag
             Club me = game().human();
-            Runnable afterLeague = r.cupMatch == null ? () -> showReport(r)
-                    : () -> LiveMatch.show(ctx(), me, r.cupMatch, Cup.NAME + " – " + r.cupRoundName, () -> showReport(r));
-            LiveMatch.show(ctx(), me, r.leagueMatch, "Live: week " + game().week(), afterLeague);
+            Runnable chain = () -> showReport(r);
+            if (r.europeMatch != null) {
+                Runnable next = chain;
+                chain = () -> LiveMatch.show(ctx(), me, r.europeMatch, Game.EUROPE_NAME + " – " + r.europeRoundName, next);
+            }
+            if (r.cupMatch != null) {
+                Runnable next = chain;
+                chain = () -> LiveMatch.show(ctx(), me, r.cupMatch, Cup.NAME + " – " + r.cupRoundName, next);
+            }
+            LiveMatch.show(ctx(), me, r.leagueMatch, "Live: week " + game().week(), chain);
         } else {
             showReport(r);
         }
@@ -227,6 +240,16 @@ public class HomeScreen extends Screen {
             appendScorers(sb, r.cupMatch, me);
             appendIncidents(sb, r.cupMatch, me);
             appendOpponentSetup(sb, r.cupMatch, me);
+            sb.append("\n");
+        }
+        if (r.europeMatch != null) {
+            sb.append(Game.EUROPE_NAME).append(" – ").append(r.europeRoundName).append("\n")
+                    .append(r.europeMatch.describe()).append("\n");
+            if (r.europeMatch.penaltyWinner != null) {
+                sb.append(r.europeMatch.penaltyWinner.name).append(" wint na strafschoppen\n");
+            }
+            appendScorers(sb, r.europeMatch, me);
+            appendIncidents(sb, r.europeMatch, me);
             sb.append("\n");
         }
         if (!r.messages.isEmpty()) sb.append(join(r.messages));

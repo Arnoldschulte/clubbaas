@@ -680,6 +680,38 @@ public class GameTest {
         assertTrue(happy > angry);
     }
 
+    // ---- Europees voetbal -------------------------------------------------------------
+
+    @Test
+    public void europeanCupIsPlayedEachSeason() {
+        Game g = newGame();
+        assertNotNull(g.europe());
+        assertEquals(16, g.europe().remainingCount());
+        SeasonSummary s = playSeason(g);
+        assertTrue(g.europe().isFinished());
+        assertEquals(4, g.europe().rounds.size());
+        assertEquals(Game.EUROPE_SPOTS, s.europeQualified.size());
+    }
+
+    @Test
+    public void qualifiedClubPlaysInEuropeAndEarnsMoney() {
+        Game g = newGame();
+        playSeason(g);
+        g.europeQualified.set(0, g.human());
+        g.advanceWeek(); // nieuw seizoen
+        assertNotNull(g.humanEuropeResult());
+        assertTrue(g.europe().isStillIn(g.human()));
+        Long prize = g.human().ledger.season().get("Prijzengeld");
+        assertNotNull(prize);
+        assertTrue(prize >= 1_500_000L);
+        boolean played = false;
+        for (int i = 0; i < Game.WEEKS_PER_SEASON; i++) {
+            WeekReport r = g.advanceWeek();
+            if (r.europeMatch != null) played = true;
+        }
+        assertTrue(played);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

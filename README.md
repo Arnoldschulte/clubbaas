@@ -45,6 +45,9 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 - **7 divisies × 12 clubs**, 22 speelweken. De nummers 1 en 2 promoveren, de laatste twee degraderen.
 - **Beker** met alle 84 clubs in week 2, 5, 8, 11, 14, 17 en 20. Elke gewonnen ronde levert
   een premie op die per ronde verdubbelt.
+- **Europese Beker**: de top 3 van de Topdivisie speelt het volgende seizoen mee, samen met
+  13 sterke buitenlandse clubs (fictief). Knock-out in week 4, 10, 16 en 21. Startpremie
+  € 1,5 mln, per gewonnen ronde € 1, 2, 4 en 8 mln.
 - **Tactiek**: kies een formatie (4-4-2, 4-3-3, 4-5-1, 3-5-2, 5-3-2) en een speelwijze
   (verdedigend, normaal, aanvallend). AI-clubs kiezen elk seizoen de formatie die bij hun
   selectie past en passen hun speelwijze per wedstrijd aan de tegenstander aan.
@@ -132,6 +135,5 @@ Spelerswaarde en salaris staan in `Player.baseValue()` en `Player.wageFor()`.
 
 ## Ideeën voor de volgende stap
 
-- Europese toernooien voor de top 3 van de Topdivisie
 - Bouwtijd voor het stadion (uitbreiding klaar na X weken)
 - Prestaties en een highscorelijst

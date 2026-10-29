@@ -4,7 +4,7 @@ package nl.clubbaas.engine;
 public enum BoardObjective {
     KAMPIOEN("Kampioen worden", 1),
     PROMOTIE("Promotie", Game.PROMOTION_SPOTS),
-    TOP3("Bij de top 3 eindigen", 3),
+    TOP3("Europees voetbal halen (top 3)", 3),
     BOVENSTE_HELFT("Bovenste helft", Game.CLUBS_PER_DIVISION / 2),
     HANDHAVING("Handhaving", Game.CLUBS_PER_DIVISION - Game.PROMOTION_SPOTS);
 

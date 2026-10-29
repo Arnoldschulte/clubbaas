@@ -65,16 +65,18 @@ public class ClubScreen extends Screen {
         root.addView(board);
 
         List<SeasonRecord> history = me.history;
-        int titles = 0, promotions = 0, cups = 0;
+        int titles = 0, promotions = 0, cups = 0, europeCups = 0;
         for (SeasonRecord r : history) {
             if (r.outcome.contains("ampioen")) titles++;
             if (r.outcome.equals("Promotie") || r.outcome.equals("Kampioen")) promotions++;
             if (r.cupResult.startsWith("Bekerwinnaar")) cups++;
+            if ("Winnaar!".equals(r.europeResult)) europeCups++;
         }
         LinearLayout honours = Ui.card(c, "Erelijst");
         honours.addView(Ui.keyValue(c, "Kampioenschappen", String.valueOf(titles)));
         honours.addView(Ui.keyValue(c, "Promoties", String.valueOf(promotions)));
         honours.addView(Ui.keyValue(c, Cup.NAME, String.valueOf(cups)));
+        honours.addView(Ui.keyValue(c, nl.clubbaas.engine.Game.EUROPE_NAME, String.valueOf(europeCups)));
         root.addView(honours);
 
         LinearLayout hist = Ui.card(c, "Historie");
@@ -87,7 +89,8 @@ public class ClubScreen extends Screen {
             item.setPadding(0, Ui.dp(c, 8), 0, Ui.dp(c, 8));
             String outcome = r.outcome.isEmpty() ? "" : "  ·  " + r.outcome;
             item.addView(Ui.text(c, r.season + ": " + r.position + "e in de " + r.division + outcome, 15, Ui.TEXT, true));
-            item.addView(Ui.muted(c, "Beker: " + r.cupResult + "  ·  Topscorer: " + r.topScorer));
+            item.addView(Ui.muted(c, "Beker: " + r.cupResult + "  ·  Topscorer: " + r.topScorer
+                    + (r.europeResult != null ? "\nEuropa: " + r.europeResult : "")));
             hist.addView(item);
         }
         root.addView(hist);

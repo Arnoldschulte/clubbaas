@@ -47,7 +47,24 @@ public class NameGenerator implements Serializable {
             "De Molen", "Noorderlicht", "Het Anker", "De Eik", "Polderman", "Zonnegloed", "De Vaart",
             "Kroonstad", "Horizon", "De Linde", "Tulpenhof", "Waddenzicht"};
 
+    private static final String[] FOREIGN_PREFIX = {
+            "Real ", "Dynamo ", "Olympique ", "Sporting ", "Inter ", "Atlético ", "Racing ", "Lokomotiv ",
+            "Union ", "Academica ", "Spartak ", "Rapid "};
+    private static final String[] FOREIGN_TOWN = {
+            "Valmora", "Brenzia", "Kostrava", "Ardelle", "Montverre", "Saldana", "Torvik", "Gradesk",
+            "Aurelion", "Velloria", "Castrel", "Novagrad", "Pirelos", "Esmara", "Dravenik", "Silvane",
+            "Oskarby", "Meridia", "Tolvane", "Barcosa"};
+
     private final Set<String> usedClubNames = new HashSet<>();
+
+    /** Fictieve buitenlandse clubnaam. Mag per seizoen opnieuw gebruikt worden. */
+    public String foreignClubName(Random rng, Set<String> taken) {
+        for (int attempt = 0; attempt < 200; attempt++) {
+            String name = FOREIGN_PREFIX[rng.nextInt(FOREIGN_PREFIX.length)] + FOREIGN_TOWN[rng.nextInt(FOREIGN_TOWN.length)];
+            if (taken.add(name)) return name;
+        }
+        return "FC Buitenland " + taken.size();
+    }
 
     public String sponsorName(Random rng) {
         return SPONSOR_START[rng.nextInt(SPONSOR_START.length)] + " " + SPONSOR_END[rng.nextInt(SPONSOR_END.length)];

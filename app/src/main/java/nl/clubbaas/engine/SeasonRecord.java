@@ -12,6 +12,7 @@ public class SeasonRecord implements Serializable {
     public final String cupResult;
     public final String topScorer;
     public final String outcome; // "Kampioen", "Promotie", "Degradatie" of ""
+    public String europeResult;  // null = niet geplaatst (of oude savegame)
 
     public SeasonRecord(String season, String division, int position, String cupResult,
                         String topScorer, String outcome) {

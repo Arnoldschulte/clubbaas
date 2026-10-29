@@ -70,6 +70,18 @@ public class Game implements Serializable {
     private boolean liveDisabled; // instelling: live verslag uit (standaard aan)
     private List<Loan> loans;     // uitgeleende spelers (null in oude savegames)
 
+    // Europees voetbal (null in oude savegames)
+    public static final String EUROPE_NAME = "Europese Beker";
+    public static final int[] EUROPE_WEEKS = {4, 10, 16, 21};
+    public static final int EUROPE_SPOTS = 3;
+    private static final int EUROPE_CLUBS = 16;
+    private static final long EUROPE_PARTICIPATION = 1_500_000;
+    private static final long EUROPE_ROUND_PRIZE = 1_000_000;
+    private Cup europe;
+    List<Club> europeQualified;       // package-private voor tests
+    private List<Club> foreignClubs;
+    private String humanEuropeResult;
+
     // Bestuur en supporters (boardInit = false in oude savegames)
     private boolean boardInit;
     BoardObjective boardObjective;    // package-private voor tests
@@ -180,6 +192,7 @@ public class Game implements Serializable {
         refreshCandidates();
         week = 0;
         seasonOver = false;
+        createEurope();
     }
 
     // ---- Publieke getters voor de UI --------------------------------------------------
@@ -283,10 +296,12 @@ public class Game implements Serializable {
         for (Player p : human.squad) appearancesBefore.put(p.id, p.appearances);
 
         // Blessures genezen
-        for (Club c : allClubs()) for (Player p : c.squad) if (p.injuryWeeks > 0) p.injuryWeeks--;
+        List<Club> inPlay = allClubs();
+        inPlay.addAll(foreignClubs());
+        for (Club c : inPlay) for (Player p : c.squad) if (p.injuryWeeks > 0) p.injuryWeeks--;
 
         // Herstel van vermoeidheid
-        for (Club c : allClubs()) MatchEngine.recover(c);
+        for (Club c : inPlay) MatchEngine.recover(c);
 
         // Competitie
         for (Division d : divisions) {
@@ -337,6 +352,8 @@ public class Game implements Serializable {
                 addNews(cup.winner.name + " wint de " + Cup.NAME + ".");
             }
         }
+
+        playEuropeRound(rep);
 
         updateMorale(appearancesBefore);
         progressConstruction(rep);
@@ -500,13 +517,28 @@ public class Game implements Serializable {
         boolean promoted = human.level > 1 && pos <= PROMOTION_SPOTS;
         s.boardVerdict = boardSeasonVerdict(pos, promoted, cup.winner == human);
 
+        // Europa: wie plaatst zich voor volgend seizoen?
+        s.europeResult = humanEuropeResult;
+        s.europeWinner = europe != null && europe.winner != null ? europe.winner.name : null;
+        europeQualified = new ArrayList<>();
+        List<TableRow> topDivision = division(1).sortedTable();
+        for (int i = 0; i < EUROPE_SPOTS; i++) {
+            europeQualified.add(topDivision.get(i).club);
+            s.europeQualified.add(topDivision.get(i).club.name);
+        }
+        if (europeQualified.contains(human)) {
+            addNews(human.name + " plaatst zich voor de " + EUROPE_NAME + "!");
+        }
+
         Player top = human.topScorer();
         String shortOutcome = s.outcome.startsWith("LANDS") ? "Landskampioen"
                 : s.outcome.startsWith("Kampioen") ? "Kampioen"
                 : s.outcome.startsWith("Promotie") ? "Promotie"
                 : s.outcome.startsWith("Degradatie") ? "Degradatie" : "";
-        human.history.add(new SeasonRecord(s.season, d.name, pos, humanCupResult,
-                top == null ? "-" : top.name + " (" + top.goals + ")", shortOutcome));
+        SeasonRecord record = new SeasonRecord(s.season, d.name, pos, humanCupResult,
+                top == null ? "-" : top.name + " (" + top.goals + ")", shortOutcome);
+        record.europeResult = humanEuropeResult;
+        human.history.add(record);
         addNews("Einde seizoen: " + pos + "e plaats. " + s.outcome);
         return s;
     }
@@ -1104,6 +1136,100 @@ public class Game implements Serializable {
         return ActionResult.ok(p.name + " is vertrokken.");
     }
 
+    // ---- Europees voetbal -------------------------------------------------------------
+
+    public Cup europe() { return europe; }
+
+    /** Null als de eigen club dit seizoen niet meedoet. */
+    public String humanEuropeResult() { return humanEuropeResult; }
+
+    public List<Club> foreignClubs() {
+        return foreignClubs == null ? Collections.<Club>emptyList() : foreignClubs;
+    }
+
+    public static boolean isEuropeWeek(int w) {
+        for (int ew : EUROPE_WEEKS) if (ew == w) return true;
+        return false;
+    }
+
+    public boolean nextWeekHasEuropeMatch() {
+        return !seasonOver && europe != null && isEuropeWeek(week + 1) && europe.isStillIn(human) && !europe.isFinished();
+    }
+
+    /** Nieuw toernooi: de gekwalificeerde clubs plus sterke buitenlandse clubs. */
+    private void createEurope() {
+        List<Club> qualified = new ArrayList<>();
+        if (europeQualified != null) {
+            for (Club c : europeQualified) if (c != null) qualified.add(c);
+        }
+        if (qualified.isEmpty()) {
+            // Eerste seizoen (of oude savegame): de sterkste clubs van de Topdivisie
+            List<Club> top = new ArrayList<>(division(1).clubs);
+            top.sort((a, b) -> Double.compare(MatchEngine.strength(b), MatchEngine.strength(a)));
+            qualified.addAll(top.subList(0, Math.min(EUROPE_SPOTS, top.size())));
+        }
+        foreignClubs = new ArrayList<>();
+        java.util.Set<String> taken = new java.util.HashSet<>();
+        for (Club c : allClubs()) taken.add(c.name);
+        int target = targetSkill(1);
+        while (qualified.size() + foreignClubs.size() < EUROPE_CLUBS) {
+            Club f = new Club(nextClubId++, names.foreignClubName(rng, taken),
+                    PALETTE[rng.nextInt(PALETTE.length)], 0, false);
+            int strength = target - 2 + rng.nextInt(13); // -2 tot +10 boven de Topdivisie
+            int[] template = {2, 6, 6, 4};
+            for (int pos = 0; pos < template.length; pos++) {
+                for (int i = 0; i < template[pos]; i++) {
+                    f.squad.add(newPlayer(Position.values()[pos], strength, 4, 21, 32));
+                }
+            }
+            pickAiFormation(f);
+            foreignClubs.add(f);
+        }
+        List<Club> all = new ArrayList<>(qualified);
+        all.addAll(foreignClubs);
+        europe = new Cup(all);
+        humanEuropeResult = qualified.contains(human) ? "Nog in de race" : null;
+        if (humanEuropeResult != null) {
+            addMoney("Prijzengeld", EUROPE_PARTICIPATION);
+            addNews(human.name + " speelt dit seizoen in de " + EUROPE_NAME + "! Startpremie: "
+                    + Fmt.money(EUROPE_PARTICIPATION) + ".");
+        }
+        for (Club c : qualified) if (!c.human) c.money += EUROPE_PARTICIPATION;
+    }
+
+    private void playEuropeRound(WeekReport rep) {
+        if (europe == null || europe.isFinished() || !isEuropeWeek(week)) return;
+        boolean wasIn = europe.isStillIn(human);
+        List<Fixture> round = europe.playRound(week, rng);
+        String roundName = europe.roundNames.get(europe.roundNames.size() - 1);
+        long prize = EUROPE_ROUND_PRIZE << (europe.rounds.size() - 1);
+        for (Fixture f : round) {
+            Club winner = f.winner();
+            if (winner != null && !winner.human && winner.level > 0) winner.money += prize;
+            if (!f.involves(human)) continue;
+            rep.europeMatch = f;
+            rep.europeRoundName = roundName;
+            if (f.home == human) collectGate(f);
+            managerReaction(f, rep);
+            reportCards(f, rep);
+            if (winner == human) {
+                addMoney("Prijzengeld", prize);
+                rep.messages.add("Door in de " + EUROPE_NAME + "! Premie: " + Fmt.money(prize));
+            } else {
+                humanEuropeResult = "Uitgeschakeld in " + roundName.toLowerCase(Fmt.NL);
+                addNews(human.name + " ligt uit de " + EUROPE_NAME + " (" + roundName.toLowerCase(Fmt.NL) + ").");
+            }
+        }
+        if (wasIn && europe.winner == human) {
+            humanEuropeResult = "Winnaar!";
+            addNews("HISTORISCH! " + human.name + " wint de " + EUROPE_NAME + "!");
+            adjustSupporters(15);
+            changeConfidence(15);
+        } else if (europe.isFinished()) {
+            addNews(europe.winner.name + " wint de " + EUROPE_NAME + ".");
+        }
+    }
+
     // ---- Bestuur en supporters --------------------------------------------------------
 
     public static final int BOARD_START = 65;
@@ -1201,7 +1327,7 @@ public class Game implements Serializable {
             int pos = humanDivision().positionOf(human);
             int target = boardObjective.targetPosition;
             if (pos <= target) changeConfidence(1);
-            else if (pos > target + 3) changeConfidence(-2);
+            else if (pos > target + 3) changeConfidence(-1);
         }
         if (human.money < 0) changeConfidence(-2);
         if (supporterMood >= 75) changeConfidence(1);
@@ -1226,7 +1352,7 @@ public class Game implements Serializable {
             changeConfidence(bonus);
             verdict = "Doel gehaald (" + boardObjective.label.toLowerCase(Fmt.NL) + "). Het bestuur is tevreden.";
         } else {
-            changeConfidence(-Math.min(35, 5 * (pos - target)));
+            changeConfidence(-Math.min(30, 4 * (pos - target)));
             verdict = "Doel niet gehaald (" + boardObjective.label.toLowerCase(Fmt.NL) + ", " + pos + "e geworden).";
         }
         if (cupWon) changeConfidence(10);
