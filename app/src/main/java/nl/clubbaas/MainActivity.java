@@ -16,7 +16,9 @@ import java.io.File;
 
 import nl.clubbaas.engine.Fmt;
 import nl.clubbaas.engine.Game;
+import nl.clubbaas.engine.Highscores;
 import nl.clubbaas.engine.SaveManager;
+import nl.clubbaas.ui.AchievementsScreen;
 import nl.clubbaas.ui.ClubScreen;
 import nl.clubbaas.ui.CupScreen;
 import nl.clubbaas.ui.EuropeScreen;
@@ -40,6 +42,7 @@ import nl.clubbaas.ui.Ui;
  */
 public class MainActivity extends Activity {
     private static final String SAVE_FILE = "clubbaas.sav";
+    private static final String HIGHSCORE_FILE = "highscores.txt";
 
     private Game game;
     private Screen current;
@@ -71,7 +74,9 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (game != null && !(current instanceof HomeScreen) && !(current instanceof NewGameScreen)) {
+        if (game == null && current instanceof AchievementsScreen) {
+            show(new NewGameScreen(this));
+        } else if (game != null && !(current instanceof HomeScreen) && !(current instanceof NewGameScreen)) {
             show(new HomeScreen(this));
         } else {
             super.onBackPressed();
@@ -106,6 +111,10 @@ public class MainActivity extends Activity {
 
     public void save() {
         if (game == null) return;
+        if (game.isGameOver() && !game.isHighscoreRecorded()) {
+            String reason = game.gameOverReason() == null ? "" : game.gameOverReason();
+            recordHighscore(reason.contains("ontslagen") ? "Ontslagen" : "Failliet");
+        }
         try {
             SaveManager.save(game, new File(getFilesDir(), SAVE_FILE));
         } catch (Exception e) {
@@ -113,7 +122,23 @@ public class MainActivity extends Activity {
         }
     }
 
+    public File highscoreFile() {
+        return new File(getFilesDir(), HIGHSCORE_FILE);
+    }
+
+    /** Zet het huidige spel op de highscorelijst (één keer per spel). */
+    private void recordHighscore(String ending) {
+        if (game == null || game.isHighscoreRecorded() || game.human().history.isEmpty()) return;
+        try {
+            Highscores.add(highscoreFile(), Highscores.entryFor(game, ending));
+            game.markHighscoreRecorded();
+        } catch (Exception e) {
+            Ui.toast(this, "Highscore opslaan mislukt: " + e.getMessage());
+        }
+    }
+
     public void deleteSave() {
+        if (game != null && !game.isGameOver()) recordHighscore("Gestopt");
         File f = new File(getFilesDir(), SAVE_FILE);
         if (f.exists() && !f.delete()) Ui.toast(this, "Kon savegame niet verwijderen");
         game = null;
@@ -213,7 +238,7 @@ public class MainActivity extends Activity {
 
     private void showMoreMenu() {
         String[] items = {"🎯  Tactiek", "📅  Wedstrijden", "🏆  Beker", "🌍  " + Game.EUROPE_NAME, "🏟  Stadion",
-                "🧑‍💼  Staf", "💰  Financiën", "📰  Nieuws", "🏛  Club & historie"};
+                "🧑‍💼  Staf", "💰  Financiën", "📰  Nieuws", "🏛  Club & historie", "🏅  Prestaties & highscores"};
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Meer")
                 .setItems(items, (d, which) -> {
@@ -226,7 +251,8 @@ public class MainActivity extends Activity {
                         case 5: show(new StaffScreen(this)); break;
                         case 6: show(new FinanceScreen(this)); break;
                         case 7: show(new NewsScreen(this)); break;
-                        default: show(new ClubScreen(this));
+                        case 8: show(new ClubScreen(this)); break;
+                        default: show(new AchievementsScreen(this));
                     }
                 })
                 .show();

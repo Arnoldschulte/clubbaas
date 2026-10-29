@@ -70,6 +70,11 @@ public class Game implements Serializable {
     private boolean liveDisabled; // instelling: live verslag uit (standaard aan)
     private List<Loan> loans;     // uitgeleende spelers (null in oude savegames)
 
+    // Prestaties en highscore (null/false in oude savegames)
+    private java.util.EnumSet<Achievement> achievements;
+    private boolean highscoreRecorded;
+    private transient List<String> unlockMessages;
+
     // Europees voetbal (null in oude savegames)
     public static final String EUROPE_NAME = "Europese Beker";
     public static final int[] EUROPE_WEEKS = {4, 10, 16, 21};
@@ -313,6 +318,7 @@ public class Game implements Serializable {
                     if (f.home == human) collectGate(f);
                     updateFans(f);
                     supportersAfterMatch(f);
+                    checkMatchAchievements(f);
                     managerReaction(f, rep);
                     reportCards(f, rep);
                     if (f.winner() == human && human.sponsorDeal != null && human.sponsorDeal.winBonus > 0) {
@@ -333,6 +339,7 @@ public class Game implements Serializable {
                     rep.cupRoundName = roundName;
                     managerReaction(f, rep);
                     reportCards(f, rep);
+                    checkMatchAchievements(f);
                     if (f.home == human) collectGate(f);
                     if (f.winner() == human) {
                         long prize = 5_000L << (cup.rounds.size() - 1);
@@ -346,6 +353,7 @@ public class Game implements Serializable {
             }
             if (wasIn && cup.winner == human) {
                 humanCupResult = "Bekerwinnaar!";
+                unlock(Achievement.BEKER);
                 addNews("FEEST! " + human.name + " wint de " + Cup.NAME + "!");
             }
             if (cup.isFinished() && cup.winner != human) {
@@ -381,6 +389,7 @@ public class Game implements Serializable {
                 fire(rep, "Na dit seizoen heeft het bestuur genoeg gezien: je bent ontslagen.");
             }
         }
+        checkWeeklyAchievements(rep);
         return rep;
     }
 
@@ -417,6 +426,8 @@ public class Game implements Serializable {
         if (f.cup) attendance = Math.min(human.stadium.effectiveCapacity(), (int) (attendance * 1.15));
         f.attendance = attendance;
         human.lastAttendance = attendance;
+        int capacity = human.stadium.effectiveCapacity();
+        if (attendance >= capacity && capacity >= 1_000) unlock(Achievement.UITVERKOCHT);
         addMoney("Kaartverkoop", (long) attendance * human.stadium.ticketPrice);
         addMoney("Horeca & fanshop", Math.round(attendance * human.stadium.spendPerFan()));
     }
@@ -516,6 +527,10 @@ public class Game implements Serializable {
         s.cupWinner = cup.winner == null ? null : cup.winner.name;
         boolean promoted = human.level > 1 && pos <= PROMOTION_SPOTS;
         s.boardVerdict = boardSeasonVerdict(pos, promoted, cup.winner == human);
+        if (promoted) unlock(Achievement.EERSTE_PROMOTIE);
+        if (pos == 1) unlock(Achievement.KAMPIOEN);
+        if (pos == 1 && human.level == 1) unlock(Achievement.LANDSKAMPIOEN);
+        if (d.sortedTable().get(pos - 1).lost == 0) unlock(Achievement.ONGESLAGEN);
 
         // Europa: wie plaatst zich voor volgend seizoen?
         s.europeResult = humanEuropeResult;
@@ -737,6 +752,7 @@ public class Game implements Serializable {
             Player p = new Player(nextPlayerId++, names.personName(rng), neededPosition(human),
                     16 + rng.nextInt(2), skill, potential);
             p.contractYears = 3;
+            p.academy = true;
             human.squad.add(p);
             if (sb.length() > 0) sb.append(", ");
             sb.append(p.name).append(" (").append(p.position.code).append(")");
@@ -1093,6 +1109,7 @@ public class Game implements Serializable {
             }
         }
         addMoney("Transfers (verkoop)", price);
+        if (price >= 1_000_000) unlock(Achievement.TRANSFERKONING);
         addNews(p.name + " verkocht aan " + (buyer == null ? "een buitenlandse club" : buyer.name)
                 + " voor " + Fmt.money(price) + ".");
     }
@@ -1134,6 +1151,71 @@ public class Game implements Serializable {
         human.squad.remove(p);
         addNews("Contract van " + p.name + " ontbonden.");
         return ActionResult.ok(p.name + " is vertrokken.");
+    }
+
+    // ---- Prestaties en score ----------------------------------------------------------
+
+    public java.util.Set<Achievement> achievements() {
+        if (achievements == null) achievements = java.util.EnumSet.noneOf(Achievement.class);
+        return achievements;
+    }
+
+    public boolean isHighscoreRecorded() { return highscoreRecorded; }
+
+    public void markHighscoreRecorded() { highscoreRecorded = true; }
+
+    private void unlock(Achievement a) {
+        if (!achievements().add(a)) return;
+        String msg = "🏅 Prestatie behaald: " + a.title + " (" + a.description.toLowerCase(Fmt.NL) + ")";
+        addNews(msg);
+        if (unlockMessages == null) unlockMessages = new ArrayList<>();
+        unlockMessages.add(msg);
+    }
+
+    /** Na elke eigen wedstrijd. */
+    private void checkMatchAchievements(Fixture f) {
+        if (f.winner() != human) return;
+        if (!f.cup) unlock(Achievement.EERSTE_ZEGE);
+        int margin = Math.abs(f.homeGoals - f.awayGoals);
+        if (margin >= 5) unlock(Achievement.GROTE_ZEGE);
+    }
+
+    /** Aan het eind van elke week. */
+    private void checkWeeklyAchievements(WeekReport rep) {
+        if (human.money >= 1_000_000) unlock(Achievement.MILJONAIR);
+        if (human.money >= 10_000_000) unlock(Achievement.TIEN_MILJOEN);
+        if (human.stadium.capacity >= 5_000) unlock(Achievement.STADION);
+        if (human.stadium.capacity >= 25_000) unlock(Achievement.ARENA);
+        if (human.level == 1) unlock(Achievement.TOPDIVISIE);
+        boolean topStaff = true;
+        for (StaffRole r : StaffRole.values()) if (human.staffRating(r) < 4) topStaff = false;
+        if (topStaff) unlock(Achievement.TOPSTAF);
+        for (Player p : human.squad) {
+            if (p.goals >= 20) unlock(Achievement.GOALGETTER);
+            if (p.academy && p.skill >= 60) unlock(Achievement.TALENTENFABRIEK);
+        }
+        if (unlockMessages != null) {
+            rep.messages.addAll(unlockMessages);
+            unlockMessages.clear();
+        }
+    }
+
+    /**
+     * Score voor de highscorelijst: elk seizoen punten naar divisie en eindpositie,
+     * plus bonussen voor promoties, titels, bekers, Europa en prestaties.
+     */
+    public int score() {
+        int score = 0;
+        for (SeasonRecord r : human.history) {
+            int level = Highscores.levelOf(r.division);
+            score += (Game.DIVISIONS + 1 - level) * 10 + (CLUBS_PER_DIVISION + 1 - r.position);
+            if (r.outcome.equals("Promotie") || r.outcome.equals("Kampioen")) score += 20;
+            if (r.outcome.contains("ampioen")) score += 50;
+            if (r.cupResult.startsWith("Bekerwinnaar")) score += 40;
+            if (r.europeResult != null) score += "Winnaar!".equals(r.europeResult) ? 115 : 15;
+        }
+        score += achievements().size() * 5;
+        return score;
     }
 
     // ---- Europees voetbal -------------------------------------------------------------
@@ -1190,6 +1272,7 @@ public class Game implements Serializable {
         europe = new Cup(all);
         humanEuropeResult = qualified.contains(human) ? "Nog in de race" : null;
         if (humanEuropeResult != null) {
+            unlock(Achievement.EUROPA_DEBUUT);
             addMoney("Prijzengeld", EUROPE_PARTICIPATION);
             addNews(human.name + " speelt dit seizoen in de " + EUROPE_NAME + "! Startpremie: "
                     + Fmt.money(EUROPE_PARTICIPATION) + ".");
@@ -1212,6 +1295,7 @@ public class Game implements Serializable {
             if (f.home == human) collectGate(f);
             managerReaction(f, rep);
             reportCards(f, rep);
+            checkMatchAchievements(f);
             if (winner == human) {
                 addMoney("Prijzengeld", prize);
                 rep.messages.add("Door in de " + EUROPE_NAME + "! Premie: " + Fmt.money(prize));
@@ -1222,6 +1306,7 @@ public class Game implements Serializable {
         }
         if (wasIn && europe.winner == human) {
             humanEuropeResult = "Winnaar!";
+            unlock(Achievement.EUROPA);
             addNews("HISTORISCH! " + human.name + " wint de " + EUROPE_NAME + "!");
             adjustSupporters(15);
             changeConfidence(15);

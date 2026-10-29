@@ -20,6 +20,7 @@ public class Player implements Serializable {
     public int yellowCards;     // dit seizoen
     public int suspension;      // aantal wedstrijden geschorst
     int fatigue;                // vermoeidheid 0-60; conditie = 100 - vermoeidheid
+    public boolean academy;     // afkomstig uit de eigen jeugdopleiding
 
     // Transfermarkt
     public long askingPrice;    // alleen voor spelers op de markt (0 = transfervrij)

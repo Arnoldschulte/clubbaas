@@ -74,6 +74,7 @@ public class NewGameScreen extends Screen {
             int year = Calendar.getInstance().get(Calendar.YEAR);
             act.startNewGame(new Game(name, clubName, selectedColor, year, System.nanoTime()));
         }));
+        root.addView(Ui.secondaryButton(c, "🏅 Highscores bekijken", v -> act.show(new AchievementsScreen(act))));
     }
 
     private void paintSwatches(Context c, TextView[] swatches) {

@@ -95,6 +95,9 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 - **Fans** groeien bij winst en promotie; ticketprijs bepaalt hoeveel er komen.
 - **Einde seizoen**: spelers worden ouder en ontwikkelen zich (trainer + trainingscomplex helpen),
   oude spelers stoppen, aflopende contracten vertrekken, jeugdacademie levert talenten.
+- **Prestaties**: 19 mijlpalen (van eerste overwinning tot Europese Beker en een talent uit
+  eigen jeugd). **Highscores** over al je spellen heen, los van de savegame bewaard. Score =
+  punten per seizoen naar divisie en eindpositie + bonussen voor prijzen en prestaties.
 - **Faillissement** als je 8 weken achter elkaar rood staat, **ontslag** als het bestuur geen
   vertrouwen meer heeft.
 
@@ -136,4 +139,3 @@ Spelerswaarde en salaris staan in `Player.baseValue()` en `Player.wageFor()`.
 ## Ideeën voor de volgende stap
 
 - Bouwtijd voor het stadion (uitbreiding klaar na X weken)
-- Prestaties en een highscorelijst

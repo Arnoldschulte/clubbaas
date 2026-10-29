@@ -712,6 +712,46 @@ public class GameTest {
         assertTrue(played);
     }
 
+    // ---- Prestaties en highscores -----------------------------------------------------
+
+    @Test
+    public void achievementsAreUnlockedAndScoreGrows() {
+        Game g = newGame();
+        for (Player p : g.human().squad) p.skill = 95;
+        assertEquals(0, g.score());
+        playSeason(g);
+        assertTrue(g.achievements().contains(Achievement.EERSTE_ZEGE));
+        assertTrue(g.achievements().contains(Achievement.EERSTE_PROMOTIE));
+        assertTrue(g.achievements().contains(Achievement.KAMPIOEN));
+        assertTrue(g.score() > 50);
+    }
+
+    @Test
+    public void highscoresAreSavedSortedAndLimited() throws Exception {
+        File f = File.createTempFile("highscores", ".txt");
+        f.delete();
+        for (int i = 0; i < Highscores.MAX_ENTRIES + 5; i++) {
+            Highscores.add(f, new Highscores.Entry("Voorzitter " + i, "Club\t" + i, i, "Topdivisie", 0, 0, i * 10, "Gestopt"));
+        }
+        java.util.List<Highscores.Entry> list = Highscores.load(f);
+        assertEquals(Highscores.MAX_ENTRIES, list.size());
+        assertEquals((Highscores.MAX_ENTRIES + 4) * 10, list.get(0).score);
+        assertTrue(list.get(0).score >= list.get(1).score);
+        assertFalse(list.get(0).club.contains("\t"));
+        f.delete();
+    }
+
+    @Test
+    public void highscoreEntryReflectsCareer() {
+        Game g = newGame();
+        for (Player p : g.human().squad) p.skill = 95;
+        playSeason(g);
+        Highscores.Entry e = Highscores.entryFor(g, "Gestopt");
+        assertEquals(1, e.seasons);
+        assertEquals(g.score(), e.score);
+        assertEquals(1, e.titles);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();
