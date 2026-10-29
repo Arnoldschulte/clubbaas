@@ -29,7 +29,9 @@ app/src/main/java/nl/clubbaas/
 │   ├── Division.java        clubs, speelschema (cirkelmethode) en stand
 │   ├── Cup.java             bekertoernooi met voorronde en byes
 │   ├── Club, Player, Staff, Stadium, Ledger, ...
-│   └── SaveManager.java     opslaan via Java-serialisatie
+│   ├── SaveManager.java     opslaan/laden: gzip-JSON, back-up, oude saves omzetten
+│   ├── SaveCodec.java       Game <-> JSON (velden op naam, met versienummer)
+│   └── Json.java, Rng.java  eigen JSON-lezer/schrijver en opslaanbare randomgenerator
 └── ui/                      schermen, volledig in code opgebouwd (geen XML-layouts)
     ├── Ui.java              bouwstenen: kaarten, knoppen, chips, dialogen, kleuren
     ├── Screen.java          basisklasse voor schermen
@@ -129,6 +131,15 @@ als favoriet helpt aanvallend spelen.
 **Live verslag**: elke wedstrijd heeft een tijdlijn (doelpunten, kaarten, blessures en bij je
 eigen wedstrijden ook gemiste kansen). De app speelt je wedstrijd in ongeveer tien seconden af,
 met commentaar; overslaan kan altijd. Uitzetten kan bij Club & historie.
+
+## Savegames
+
+Het spel wordt na elke actie opgeslagen als gecomprimeerde JSON (`clubbaas.sav`), met de vorige
+versie als back-up (`clubbaas.sav.bak`). Velden staan op naam in het bestand, dus code hernoemen
+maakt oude saves niet kapot, en ontbrekende velden krijgen een standaardwaarde. De toestand van de
+randomgenerator wordt meegeschreven: een geladen spel speelt exact hetzelfde verder. Saves uit de
+eerste versies (Java-serialisatie) worden automatisch omgezet. Nieuw veld? Zie de uitleg bovenaan
+`SaveCodec.java`.
 
 ## Balans aanpassen
 

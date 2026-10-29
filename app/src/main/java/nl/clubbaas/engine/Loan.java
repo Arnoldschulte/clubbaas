@@ -13,11 +13,16 @@ public class Loan implements Serializable {
     public final int goalsAtStart;
 
     Loan(Player player, Club club, int wageSharePct) {
+        this(player, club, wageSharePct, player.appearances, player.goals);
+    }
+
+    /** Voor het inlezen van een savegame. */
+    Loan(Player player, Club club, int wageSharePct, int appearancesAtStart, int goalsAtStart) {
         this.player = player;
         this.club = club;
         this.wageSharePct = wageSharePct;
-        this.appearancesAtStart = player.appearances;
-        this.goalsAtStart = player.goals;
+        this.appearancesAtStart = appearancesAtStart;
+        this.goalsAtStart = goalsAtStart;
     }
 
     /** Wat de eigen club per week nog aan salaris betaalt. */

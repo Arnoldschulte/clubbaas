@@ -55,7 +55,7 @@ public class NameGenerator implements Serializable {
             "Aurelion", "Velloria", "Castrel", "Novagrad", "Pirelos", "Esmara", "Dravenik", "Silvane",
             "Oskarby", "Meridia", "Tolvane", "Barcosa"};
 
-    private final Set<String> usedClubNames = new HashSet<>();
+    final Set<String> usedClubNames = new HashSet<>();
 
     /** Fictieve buitenlandse clubnaam. Mag per seizoen opnieuw gebruikt worden. */
     public String foreignClubName(Random rng, Set<String> taken) {

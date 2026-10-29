@@ -50,29 +50,29 @@ public class Game implements Serializable {
             0xFF0097A7, 0xFF5D4037, 0xFF455A64, 0xFFC2185B, 0xFF212121, 0xFF00796B};
 
     // ---- Toestand ------------------------------------------------------------------------
-    private final Random rng;
-    private final NameGenerator names = new NameGenerator();
-    private final List<Division> divisions = new ArrayList<>();
-    private final List<NewsItem> news = new ArrayList<>();
-    private final List<Player> market = new ArrayList<>();
-    private final EnumMap<StaffRole, List<Staff>> candidates = new EnumMap<>(StaffRole.class);
-    private final String chairmanName;
-    private Club human;
-    private Cup cup;
-    private int seasonYear;
-    private int week;
-    private boolean seasonOver;
-    private SeasonSummary lastSummary;
-    private String humanCupResult;
-    private double pendingFanFactor = 1.0;
-    private boolean gameOver;
-    private String gameOverReason;
-    private boolean liveDisabled; // instelling: live verslag uit (standaard aan)
-    private List<Loan> loans;     // uitgeleende spelers (null in oude savegames)
+    Random rng;               // package-private: opslag (SaveCodec) heeft toegang nodig
+    final NameGenerator names = new NameGenerator();
+    final List<Division> divisions = new ArrayList<>();
+    final List<NewsItem> news = new ArrayList<>();
+    final List<Player> market = new ArrayList<>();
+    final EnumMap<StaffRole, List<Staff>> candidates = new EnumMap<>(StaffRole.class);
+    String chairmanName;
+    Club human;
+    Cup cup;
+    int seasonYear;
+    int week;
+    boolean seasonOver;
+    SeasonSummary lastSummary;
+    String humanCupResult;
+    double pendingFanFactor = 1.0;
+    boolean gameOver;
+    String gameOverReason;
+    boolean liveDisabled; // instelling: live verslag uit (standaard aan)
+    List<Loan> loans;     // uitgeleende spelers (null in oude savegames)
 
     // Prestaties en highscore (null/false in oude savegames)
-    private java.util.EnumSet<Achievement> achievements;
-    private boolean highscoreRecorded;
+    java.util.EnumSet<Achievement> achievements;
+    boolean highscoreRecorded;
     private transient List<String> unlockMessages;
 
     // Europees voetbal (null in oude savegames)
@@ -82,22 +82,27 @@ public class Game implements Serializable {
     private static final int EUROPE_CLUBS = 16;
     private static final long EUROPE_PARTICIPATION = 1_500_000;
     private static final long EUROPE_ROUND_PRIZE = 1_000_000;
-    private Cup europe;
+    Cup europe;
     List<Club> europeQualified;       // package-private voor tests
-    private List<Club> foreignClubs;
-    private String humanEuropeResult;
+    List<Club> foreignClubs;
+    String humanEuropeResult;
 
     // Bestuur en supporters (boardInit = false in oude savegames)
-    private boolean boardInit;
+    boolean boardInit;
     BoardObjective boardObjective;    // package-private voor tests
     int boardConfidence;
     int supporterMood;
-    private int nextPlayerId = 1;
-    private int nextClubId = 1;
+    int nextPlayerId = 1;
+    int nextClubId = 1;
+
+    /** Lege wereld; alleen voor het inlezen van een savegame (SaveCodec vult alles). */
+    Game() {
+        this.rng = new Rng(0);
+    }
 
     public Game(String chairmanName, String clubName, int clubColor, int startYear, long seed) {
         this.chairmanName = chairmanName;
-        this.rng = new Random(seed);
+        this.rng = new Rng(seed);
         this.seasonYear = startYear;
         createWorld(clubName.trim().isEmpty() ? "FC Clubbaas" : clubName.trim(), clubColor);
         startSeasonCommon();
@@ -959,7 +964,7 @@ public class Game implements Serializable {
 
     // ---- Biedingen op eigen spelers -----------------------------------------------------
 
-    private List<TransferBid> bids; // null in oude savegames
+    List<TransferBid> bids; // null in oude savegames
 
     public List<TransferBid> bids() {
         if (bids == null) bids = new ArrayList<>();

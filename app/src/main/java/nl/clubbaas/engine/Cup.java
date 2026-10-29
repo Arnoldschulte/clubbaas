@@ -15,7 +15,7 @@ public class Cup implements Serializable {
 
     public static final String NAME = "Nationale Beker";
 
-    private final List<Club> remaining = new ArrayList<>();
+    final List<Club> remaining = new ArrayList<>();
     public final List<String> roundNames = new ArrayList<>();
     public final List<List<Fixture>> rounds = new ArrayList<>();
     public Club winner;

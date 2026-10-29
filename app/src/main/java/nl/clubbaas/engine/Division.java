@@ -16,8 +16,8 @@ public class Division implements Serializable {
     public final int level;
     public final String name;
     public final List<Club> clubs = new ArrayList<>();
-    private final List<List<Fixture>> rounds = new ArrayList<>();
-    private final Map<Integer, TableRow> table = new HashMap<>();
+    final List<List<Fixture>> rounds = new ArrayList<>();
+    final Map<Integer, TableRow> table = new HashMap<>();
 
     public Division(int level, String name) {
         this.level = level;

@@ -184,6 +184,7 @@ public class GameTest {
         Player pushedOut = null;
         for (Player p : before) if (!after.contains(p)) pushedOut = p;
         assertNotNull(pushedOut);
+        pushedOut.age = 26; // talenten t/m 20 verwachten bewust weinig speeltijd
         for (int i = 0; i < 10; i++) {
             for (Player p : me.squad) p.injuryWeeks = 0;
             g.advanceWeek();
@@ -750,6 +751,98 @@ public class GameTest {
         assertEquals(1, e.seasons);
         assertEquals(g.score(), e.score);
         assertEquals(1, e.titles);
+    }
+
+    // ---- Robuuste savegames ----------------------------------------------------------
+
+    /** Een spel met van alles erin: huurlingen, biedingen, sponsor, Europa, historie. */
+    private static Game busyGame() {
+        Game g = newGame();
+        g.human().money = 50_000_000L;
+        SponsorDeal perf = g.human().sponsorOffers().get(2);
+        g.chooseSponsor(perf);
+        g.setFormation(Formation.F433);
+        g.setTactic(Tactic.AANVALLEND);
+        g.loanPlayer(benchTalent(g));
+        g.setFavorite(g.human().squad.get(3));
+        g.expandStadium();
+        playSeason(g);
+        g.europeQualified.set(0, g.human());
+        g.advanceWeek();
+        for (int i = 0; i < 6; i++) g.advanceWeek();
+        g.bidFor(g.human().squad.get(1));
+        return g;
+    }
+
+    @Test
+    public void jsonRoundTripIsLossless() {
+        Game g = busyGame();
+        String json = SaveCodec.encode(g);
+        Game copy = SaveCodec.decode(json);
+        assertEquals(json, SaveCodec.encode(copy));
+    }
+
+    @Test
+    public void loadedGameContinuesExactlyLikeTheOriginal() {
+        Game g = busyGame();
+        Game copy = SaveCodec.decode(SaveCodec.encode(g));
+        for (int i = 0; i < 30; i++) { // over de seizoensgrens heen
+            g.advanceWeek();
+            copy.advanceWeek();
+        }
+        assertEquals(SaveCodec.encode(g), SaveCodec.encode(copy));
+    }
+
+    @Test
+    public void missingFieldsGetDefaults() {
+        Game g = newGame();
+        String json = SaveCodec.encode(g).replace("\"liveDisabled\":false,", "")
+                .replace("\"supporterMood\":60,", "");
+        Game copy = SaveCodec.decode(json);
+        assertTrue(copy.isLiveEnabled());
+        assertEquals(Game.SUPPORTERS_NEUTRAL, copy.supporterMood());
+    }
+
+    @Test
+    public void newerVersionIsRefused() {
+        String json = SaveCodec.encode(newGame()).replace("\"version\":1", "\"version\":99");
+        try {
+            SaveCodec.decode(json);
+            throw new AssertionError("had moeten weigeren");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("nieuwere"));
+        }
+    }
+
+    @Test
+    public void backupIsUsedWhenSaveIsCorrupt() throws Exception {
+        File f = File.createTempFile("clubbaas", ".sav");
+        Game g = newGame();
+        SaveManager.save(g, f);            // eerste save
+        g.advanceWeek();
+        SaveManager.save(g, f);            // tweede save, de eerste wordt back-up
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+            out.write("kapot".getBytes());  // hoofdbestand beschadigd
+        }
+        Game loaded = SaveManager.load(f);
+        assertEquals(0, loaded.week());    // van de back-up
+        f.delete();
+        SaveManager.backupOf(f).delete();
+    }
+
+    @Test
+    public void legacyJavaSerializedSaveStillLoads() throws Exception {
+        Game g = newGame();
+        g.advanceWeek();
+        File f = File.createTempFile("legacy", ".sav");
+        try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(new java.io.FileOutputStream(f))) {
+            out.writeObject(g);
+        }
+        Game loaded = SaveManager.load(f);
+        assertEquals(1, loaded.week());
+        assertEquals(g.human().name, loaded.human().name);
+        loaded.advanceWeek();
+        f.delete();
     }
 
     @Test

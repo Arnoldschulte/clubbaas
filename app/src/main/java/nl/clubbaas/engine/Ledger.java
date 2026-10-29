@@ -8,8 +8,8 @@ import java.util.Map;
 public class Ledger implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private final LinkedHashMap<String, Long> week = new LinkedHashMap<>();
-    private final LinkedHashMap<String, Long> season = new LinkedHashMap<>();
+    final LinkedHashMap<String, Long> week = new LinkedHashMap<>();
+    final LinkedHashMap<String, Long> season = new LinkedHashMap<>();
 
     void add(String category, long amount) {
         Long w = week.get(category);
