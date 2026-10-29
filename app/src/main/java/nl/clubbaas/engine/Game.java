@@ -98,6 +98,7 @@ public class Game implements Serializable {
                         PALETTE[rng.nextInt(PALETTE.length)], level, false);
                 fillAiSquad(c);
                 pickAiFormation(c);
+                AiEconomy.initClub(c);
                 d.clubs.add(c);
             }
             divisions.add(d);
@@ -331,6 +332,7 @@ public class Game implements Serializable {
         updateMorale(appearancesBefore);
         progressConstruction(rep);
         weeklyFinances();
+        AiEconomy.weekly(this);
         weeklyMarketRefresh();
         if (week % 4 == 1) refreshCandidates();
 
@@ -528,7 +530,8 @@ public class Game implements Serializable {
         // 2. Spelers: ontwikkeling, leeftijd, pensioen, contracten
         for (Club c : allClubs()) agePlayers(c);
 
-        // 3. AI-clubs op sterkte houden
+        // 3. Transferperiode van de AI-clubs, daarna aanvullen tot een volledige selectie
+        reportTransferWindow(AiEconomy.transferWindow(this));
         for (Club c : allClubs()) {
             if (c.human) continue;
             maintainAiSquad(c);
@@ -611,24 +614,54 @@ public class Game implements Serializable {
         c.squad.removeAll(leaving);
     }
 
+    /**
+     * Vangnet na de transferperiode: aanvullen met transfervrije spelers tot 18, en alleen
+     * ingrijpen als een club ver van het niveau van zijn divisie af zit.
+     */
     private void maintainAiSquad(Club c) {
         int target = targetSkill(c.level);
         fillAiSquad(c);
-        if (c.averageSkill() < target - 3) {
+        if (c.averageSkill() < target - 2) {
+            // Transfervrije spelers op niveau aantrekken voor de zwakste plekken
             for (int i = 0; i < 3; i++) {
-                Player worst = c.worstPlayer();
+                Player worst = null;
+                for (Player p : c.squad) if (!isOnLoan(p) && (worst == null || p.skill < worst.skill)) worst = p;
+                if (worst == null) break;
                 c.squad.remove(worst);
                 c.squad.add(newPlayer(worst.position, target, 4, 20, 30));
             }
-        } else if (c.averageSkill() > target + 4) {
-            // Te sterke club (bijv. net gedegradeerd): verkoopt zijn twee beste spelers
+        } else if (c.averageSkill() > target + 8) {
+            // Veel te sterk (bijv. net gedegradeerd): toppers vertrekken naar het buitenland
             for (int i = 0; i < 2; i++) {
                 Player best = null;
-                for (Player p : c.squad) if (best == null || p.skill > best.skill) best = p;
+                for (Player p : c.squad) if (!isOnLoan(p) && (best == null || p.skill > best.skill)) best = p;
+                if (best == null) break;
                 c.squad.remove(best);
+                c.money += best.value();
                 c.squad.add(newPlayer(best.position, target, 4, 20, 30));
             }
         }
+    }
+
+    private void reportTransferWindow(List<AiEconomy.Deal> deals) {
+        if (deals.isEmpty()) return;
+        List<AiEconomy.Deal> sorted = new ArrayList<>(deals);
+        sorted.sort((a, b) -> Long.compare(b.price, a.price));
+        StringBuilder top = new StringBuilder();
+        for (int i = 0; i < Math.min(3, sorted.size()); i++) top.append("\n• ").append(sorted.get(i).describe());
+        addNews("Transferperiode: " + deals.size() + " transfers tussen clubs. Duurste:" + top);
+        int ownDivision = 0;
+        for (AiEconomy.Deal d : deals) {
+            boolean relevant = d.from.level == human.level || (d.to != null && d.to.level == human.level);
+            if (relevant && ownDivision < 5 && !sorted.subList(0, Math.min(3, sorted.size())).contains(d)) {
+                addNews("Transfer: " + d.describe() + ".");
+                ownDivision++;
+            }
+        }
+    }
+
+    Random rng() {
+        return rng;
     }
 
     private Position neededPosition(Club c) {
@@ -768,26 +801,41 @@ public class Game implements Serializable {
         if (!human.squad.contains(p)) return ActionResult.fail("Speler zit niet in je selectie.");
         if (human.squad.size() <= MIN_SQUAD) return ActionResult.fail("Je hebt minimaal " + MIN_SQUAD + " spelers nodig.");
         long offer = saleOffer(p);
-        // Koper: een club uit dezelfde of een hogere divisie
-        int buyerLevel = Math.max(1, human.level - rng.nextInt(2));
-        List<Club> options = new ArrayList<>(division(buyerLevel).clubs);
-        options.remove(human);
-        Club buyer = options.get(rng.nextInt(options.size()));
-        human.squad.remove(p);
-        p.contractYears = 2 + rng.nextInt(2);
-        p.wage = Player.wageFor(p.skill, p.age);
-        buyer.squad.add(p);
-        if (buyer.squad.size() > 22) {
-            Player worst = null;
-            for (Player q : buyer.squad) {
-                if (isOnLoan(q)) continue; // nooit een huurling van de eigen club wegdoen
-                if (worst == null || q.skill < worst.skill) worst = q;
-            }
-            if (worst != null) buyer.squad.remove(worst);
+        Club buyer = findBuyer(offer);
+        completeSale(p, buyer, offer);
+        String to = buyer == null ? "een buitenlandse club" : buyer.name;
+        return ActionResult.ok(p.name + " vertrekt naar " + to + ".");
+    }
+
+    /** Een club uit dezelfde of een hogere divisie die het bedrag kan betalen; null = buitenland. */
+    private Club findBuyer(long price) {
+        List<Club> options = new ArrayList<>();
+        for (int lvl = Math.max(1, human.level - 1); lvl <= human.level; lvl++) {
+            for (Club c : division(lvl).clubs) if (!c.human && c.money >= price) options.add(c);
         }
-        addMoney("Transfers (verkoop)", offer);
-        addNews(p.name + " verkocht aan " + buyer.name + " voor " + Fmt.money(offer) + ".");
-        return ActionResult.ok(p.name + " vertrekt naar " + buyer.name + ".");
+        return options.isEmpty() ? null : options.get(rng.nextInt(options.size()));
+    }
+
+    private void completeSale(Player p, Club buyer, long price) {
+        human.squad.remove(p);
+        if (human.favorite() == null && human.favoriteId == p.id) human.favoriteId = 0;
+        if (buyer != null) {
+            p.contractYears = 2 + rng.nextInt(2);
+            p.wage = Player.wageFor(p.skill, p.age);
+            buyer.squad.add(p);
+            buyer.money -= price;
+            if (buyer.squad.size() > 22) {
+                Player worst = null;
+                for (Player q : buyer.squad) {
+                    if (isOnLoan(q)) continue; // nooit een huurling van de eigen club wegdoen
+                    if (worst == null || q.skill < worst.skill) worst = q;
+                }
+                if (worst != null) buyer.squad.remove(worst);
+            }
+        }
+        addMoney("Transfers (verkoop)", price);
+        addNews(p.name + " verkocht aan " + (buyer == null ? "een buitenlandse club" : buyer.name)
+                + " voor " + Fmt.money(price) + ".");
     }
 
     /** Tevreden spelers verlengen goedkoper, ontevreden spelers vragen meer. */

@@ -484,6 +484,52 @@ public class GameTest {
         assertTrue(me.squad.size() >= Game.MIN_SQUAD);
     }
 
+    // ---- AI-economie ------------------------------------------------------------------
+
+    @Test
+    public void aiClubsHaveBudgetsThatChangeWeekly() {
+        Game g = newGame();
+        Club ai = g.division(1).clubs.get(0);
+        assertTrue(ai.money > 0);
+        long before = ai.money;
+        g.advanceWeek();
+        assertTrue(ai.money != before);
+    }
+
+    @Test
+    public void transferWindowMovesPlayersForMoney() {
+        Game g = newGame();
+        long totalBefore = 0;
+        for (Club c : g.allClubs()) if (!c.human) totalBefore += c.money;
+        // Een rijke Topdivisie-club met een zwakke basisspeler wil zeker kopen
+        Club buyer = g.division(1).clubs.get(0);
+        buyer.money = 500_000_000L;
+        Player weak = MatchEngine.rate(buyer).eleven().get(5);
+        weak.skill = 40;
+        java.util.List<AiEconomy.Deal> deals = AiEconomy.transferWindow(g);
+        boolean bought = false;
+        for (AiEconomy.Deal d : deals) {
+            if (d.to == buyer) {
+                bought = true;
+                assertTrue(buyer.squad.contains(d.player));
+                assertFalse(d.from.squad.contains(d.player));
+                assertTrue(d.from.level > buyer.level);
+            }
+        }
+        assertTrue(bought);
+    }
+
+    @Test
+    public void indebtedClubSellsPlayers() {
+        Game g = newGame();
+        Club broke = g.division(3).clubs.get(0);
+        broke.money = -50_000_000L;
+        int before = broke.squad.size();
+        AiEconomy.transferWindow(g);
+        assertTrue(broke.squad.size() < before);
+        assertTrue(broke.money > -50_000_000L);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

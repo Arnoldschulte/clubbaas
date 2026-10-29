@@ -112,7 +112,9 @@ public class TableScreen extends Screen {
         sb.append("Positie: ").append(d.positionOf(club)).append("e\n");
         sb.append("Teamsterkte: ").append(Math.round(MatchEngine.strength(club))).append("\n");
         sb.append("Gemiddelde vaardigheid: ").append(Math.round(club.averageSkill())).append("\n");
-        sb.append("Selectiewaarde: ").append(Fmt.money(club.totalSquadValue())).append("\n\nBeste spelers:\n");
+        sb.append("Selectiewaarde: ").append(Fmt.money(club.totalSquadValue())).append("\n");
+        if (!club.human) sb.append("Budget: ").append(Fmt.money(club.money)).append("\n");
+        sb.append("\nBeste spelers:\n");
         List<Player> sorted = new java.util.ArrayList<>(club.squad);
         sorted.sort((a, b) -> b.skill - a.skill);
         for (int i = 0; i < Math.min(5, sorted.size()); i++) {

@@ -73,6 +73,10 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 - **Sponsor**: zonder lopend contract kies je elk seizoen uit drie aanbiedingen: meerjarig
   (95%, vast voor 3 seizoenen), eenjarig (100%) of prestatie (60% + bonus per overwinning en
   bij promotie). Kies je niet, dan tekent het bestuur het eenjarige aanbod.
+- **AI-clubs** hebben een eigen budget: inkomsten per divisie (iets meer dan een selectie op
+  niveau kost) min salarissen. Na elk seizoen is er een transferperiode: clubs in de schulden
+  verkopen hun beste spelers, rijke clubs kopen de beste spelers van clubs uit lagere divisies.
+  Geld boven 40 weken inkomsten wordt geïnvesteerd. Een vangnet houdt elke divisie op niveau.
 - **Inkomsten**: kaartverkoop, horeca & fanshop, sponsor, tv-geld (hogere divisies), prijzengeld.
 - **Uitgaven**: salarissen, staf, uitbreidingen, rente.
 - **Fans** groeien bij winst en promotie; ticketprijs bepaalt hoeveel er komen.

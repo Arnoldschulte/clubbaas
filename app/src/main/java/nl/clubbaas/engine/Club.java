@@ -30,7 +30,8 @@ public class Club implements Serializable {
     // Alleen voor de eigen club
     public Stadium stadium;
     public final EnumMap<StaffRole, Staff> staff = new EnumMap<>(StaffRole.class);
-    public long money;
+    public long money;          // ook AI-clubs hebben een budget
+    boolean aiFinanceInit;      // AI: startbudget al toegekend (false in oude savegames)
     public long loan;
     public int fans;
     public long sponsorPerSeason;
