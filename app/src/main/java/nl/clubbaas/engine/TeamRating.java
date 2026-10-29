@@ -26,12 +26,15 @@ public final class TeamRating {
     public final List<Slot> slots;
     public final double attack;
     public final double defense;
+    /** True als de voorkeursspeler alleen speelt omdat de voorzitter erop aandrong. */
+    public final boolean favoriteForced;
 
-    TeamRating(Formation formation, List<Slot> slots, double attack, double defense) {
+    TeamRating(Formation formation, List<Slot> slots, double attack, double defense, boolean favoriteForced) {
         this.formation = formation;
         this.slots = Collections.unmodifiableList(slots);
         this.attack = attack;
         this.defense = defense;
+        this.favoriteForced = favoriteForced;
     }
 
     public double overall() {

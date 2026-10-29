@@ -15,7 +15,10 @@ import nl.clubbaas.engine.Fmt;
 import nl.clubbaas.engine.Formation;
 import nl.clubbaas.engine.Game;
 import nl.clubbaas.engine.MatchEngine;
+import nl.clubbaas.engine.Player;
 import nl.clubbaas.engine.Position;
+import nl.clubbaas.engine.Staff;
+import nl.clubbaas.engine.StaffRole;
 import nl.clubbaas.engine.Tactic;
 import nl.clubbaas.engine.TeamRating;
 
@@ -120,9 +123,13 @@ public class TacticsScreen extends Screen {
             root.addView(oppCard);
         }
 
+        // Invloed van de voorzitter
+        root.addView(influenceCard(c, g, me, mine));
+
         // Basiself
         LinearLayout xi = Ui.card(c, "Basiself (" + mine.formation.label + ")");
-        xi.addView(Ui.muted(c, "De beste fitte spelers worden automatisch opgesteld."));
+        xi.addView(Ui.muted(c, "De manager stelt de beste fitte spelers op."));
+        Player favorite = me.favorite();
         Position last = null;
         for (TeamRating.Slot s : mine.slots) {
             if (s.role != last) {
@@ -131,13 +138,71 @@ public class TacticsScreen extends Screen {
                 xi.addView(label);
                 last = s.role;
             }
-            String name = s.player == null ? "— noodspeler (te weinig fitte spelers)" : s.player.name;
+            String name = s.player == null ? "— noodspeler (te weinig fitte spelers)"
+                    : (s.player == favorite ? "⭐ " : "") + s.player.name
+                    + (s.player == favorite && mine.favoriteForced ? "  (op jouw verzoek)" : "");
             String right = s.player == null ? "10" : String.valueOf(s.player.skill);
             LinearLayout kv = Ui.keyValue(c, name + (s.outOfPosition() ? "  (uit positie, 70%)" : ""), right);
             if (s.outOfPosition() || s.player == null) ((TextView) kv.getChildAt(0)).setTextColor(Ui.BAD);
             xi.addView(kv);
         }
         root.addView(xi);
+    }
+
+    private LinearLayout influenceCard(Context c, Game g, Club me, TeamRating mine) {
+        LinearLayout card = Ui.card(c, "Jouw invloed");
+        Staff manager = me.staff.get(StaffRole.MANAGER);
+        Player favorite = me.favorite();
+        if (manager != null) {
+            int frustration = me.managerFrustration();
+            LinearLayout mood = Ui.keyValue(c, "Verhouding met " + manager.name, Game.managerMoodLabel(frustration));
+            ((TextView) mood.getChildAt(1)).setTextColor(frustration >= Game.FRUSTRATION_WARNING ? Ui.BAD : Ui.GOOD);
+            card.addView(mood);
+            card.addView(moodBar(c, frustration));
+        }
+        if (favorite == null) {
+            card.addView(Ui.body(c, "Je laat de opstelling aan de manager over."));
+            card.addView(Ui.muted(c, "Wil je dat een speler start, bijvoorbeeld een talent dat speeltijd nodig heeft "
+                    + "of een speler die je wilt verkopen? Kies hem in de Selectie."));
+            card.addView(Ui.secondaryButton(c, "Naar de selectie", v -> act.show(new SquadScreen(act))));
+            return card;
+        }
+        card.addView(Ui.keyValue(c, "Voorkeursspeler", "⭐ " + favorite.name));
+        String status;
+        if (favorite.isInjured()) {
+            status = "Geblesseerd, dus hij speelt nu niet. Geen ergernis.";
+        } else if (!mine.favoriteForced) {
+            status = "De manager stelt hem ook zonder jouw bemoeienis op. Geen ergernis.";
+        } else if (manager == null) {
+            status = "Hij speelt op jouw verzoek. Er is geen manager die zich eraan ergert.";
+        } else {
+            status = "Hij speelt alleen op jouw verzoek: +" + g.frustrationPerForcedMatch()
+                    + " ergernis per wedstrijd. Bij 100 stapt " + manager.name + " op.";
+        }
+        TextView st = Ui.body(c, status);
+        st.setPadding(0, Ui.dp(c, 6), 0, 0);
+        card.addView(st);
+        card.addView(Ui.secondaryButton(c, "Niet meer voortrekken", v -> {
+            g.setFavorite(null);
+            refresh();
+        }));
+        return card;
+    }
+
+    /** Balk van groen naar rood die de ergernis van de manager laat zien. */
+    private LinearLayout moodBar(Context c, int frustration) {
+        LinearLayout bar = Ui.row(c);
+        bar.setPadding(0, Ui.dp(c, 4), 0, Ui.dp(c, 4));
+        int h = Ui.dp(c, 8);
+        int color = frustration >= Game.FRUSTRATION_DANGER ? Ui.BAD
+                : frustration >= Game.FRUSTRATION_WARNING ? Ui.ACCENT : Ui.GOOD;
+        android.view.View filled = new android.view.View(c);
+        filled.setBackground(Ui.rounded(color, Ui.dp(c, 4)));
+        android.view.View empty = new android.view.View(c);
+        empty.setBackground(Ui.rounded(Ui.LINE, Ui.dp(c, 4)));
+        bar.addView(filled, new LinearLayout.LayoutParams(0, h, Math.max(1, frustration)));
+        bar.addView(empty, new LinearLayout.LayoutParams(0, h, Math.max(1, Game.FRUSTRATION_RESIGN - frustration)));
+        return bar;
     }
 
     private LinearLayout compareRow(Context c, String label, double ours, double theirs) {

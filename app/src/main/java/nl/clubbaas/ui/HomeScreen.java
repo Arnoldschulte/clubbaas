@@ -88,6 +88,13 @@ public class HomeScreen extends Screen {
         status.addView(Ui.keyValue(c, "Fans", Fmt.number(me.fans)));
         status.addView(Ui.keyValue(c, "Teamsterkte", String.valueOf(Math.round(MatchEngine.strength(me)))));
         status.addView(Ui.keyValue(c, Cup.NAME, g.humanCupResult()));
+        if (me.managerFrustration() >= Game.FRUSTRATION_WARNING) {
+            TextView warn = Ui.text(c, "⚠ De manager ergert zich aan je bemoeienis ("
+                    + Game.managerMoodLabel(me.managerFrustration()).toLowerCase(Fmt.NL) + ")", 14, Ui.BAD, true);
+            warn.setPadding(0, Ui.dp(c, 6), 0, 0);
+            warn.setOnClickListener(v -> act.show(new TacticsScreen(act)));
+            status.addView(warn);
+        }
         LinearLayout form = Ui.row(c);
         form.setPadding(0, Ui.dp(c, 8), 0, 0);
         TextView formLabel = Ui.muted(c, "Vorm  ");

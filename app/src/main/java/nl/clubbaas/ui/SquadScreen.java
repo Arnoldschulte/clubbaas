@@ -14,6 +14,8 @@ import nl.clubbaas.engine.Game;
 import nl.clubbaas.engine.MatchEngine;
 import nl.clubbaas.engine.Player;
 import nl.clubbaas.engine.Position;
+import nl.clubbaas.engine.Staff;
+import nl.clubbaas.engine.StaffRole;
 
 /** Je selectie, met per speler acties: verkopen, contract verlengen of ontslaan. */
 public class SquadScreen extends Screen {
@@ -37,6 +39,13 @@ public class SquadScreen extends Screen {
         summary.addView(Ui.keyValue(c, "Salarissen per week", Fmt.money(me.weeklyPlayerWages())));
         summary.addView(Ui.keyValue(c, "Teamsterkte (beste elf)", String.valueOf(Math.round(MatchEngine.strength(me)))));
         summary.addView(Ui.keyValue(c, "Waarde selectie", Fmt.money(me.totalSquadValue())));
+        if (me.staff.get(StaffRole.MANAGER) != null) {
+            LinearLayout mood = Ui.keyValue(c, "Verhouding met manager", Game.managerMoodLabel(me.managerFrustration()));
+            if (me.managerFrustration() >= Game.FRUSTRATION_WARNING) {
+                ((android.widget.TextView) mood.getChildAt(1)).setTextColor(Ui.BAD);
+            }
+            summary.addView(mood);
+        }
         summary.addView(Ui.muted(c, "Tik op een speler voor acties. De beste elf wordt automatisch opgesteld in je "
                 + "formatie (" + me.formation().label + "); die kies je bij Tactiek."));
         root.addView(summary);
@@ -50,7 +59,7 @@ public class SquadScreen extends Screen {
                 if (p.position != pos) continue;
                 if (any) card.addView(Ui.divider(c));
                 any = true;
-                String detail = p.age + " jr · " + Fmt.money(p.wage) + " p/w · "
+                String detail = (p == me.favorite() ? "⭐ " : "") + p.age + " jr · " + Fmt.money(p.wage) + " p/w · "
                         + contractText(p) + (eleven.contains(p) ? " · basis" : "")
                         + (p.goals > 0 ? " · ⚽ " + p.goals : "");
                 card.addView(PlayerRow.create(c, p, detail, v -> showPlayer(p)));
@@ -66,20 +75,56 @@ public class SquadScreen extends Screen {
 
     private void showPlayer(Player p) {
         Context c = ctx();
+        Game g = game();
+        boolean isFavorite = g.human().favorite() == p;
+        StringBuilder extra = new StringBuilder();
+        if (isFavorite) extra.append("\n⭐ Jouw voorkeursspeler: start altijd als hij fit is.");
+        if (Game.isShowcased(p)) extra.append("\nIn de etalage: biedingen liggen 10% hoger.");
+        if (p.age <= 23) {
+            extra.append("\nSpeeltijd: ").append(Math.min(p.appearances, Game.PLAYING_TIME_BONUS_APPS))
+                    .append("/").append(Game.PLAYING_TIME_BONUS_APPS)
+                    .append(" wedstrijden voor extra ontwikkeling dit seizoen.");
+        }
         String info = p.position.label + ", " + p.age + " jaar\n"
                 + "Vaardigheid: " + p.skill + "  (potentie: " + (p.age <= 24 ? String.valueOf(p.potential) : "bereikt") + ")\n"
                 + "Marktwaarde: " + Fmt.money(p.value()) + "\n"
                 + "Salaris: " + Fmt.money(p.wage) + " per week\n"
                 + "Contract: " + (p.contractYears == 0 ? "loopt af na dit seizoen" : "nog " + p.contractYears + " seizoen(en) na dit seizoen") + "\n"
                 + "Dit seizoen: " + p.appearances + " wedstrijden, " + p.goals + " doelpunten"
-                + (p.isInjured() ? "\nGeblesseerd: nog " + p.injuryWeeks + " week/weken" : "");
-        new AlertDialog.Builder(c)
-                .setTitle(p.name)
-                .setMessage(info)
-                .setPositiveButton("Verkopen", (d, w) -> sell(p))
-                .setNeutralButton("Verlengen", (d, w) -> renew(p))
-                .setNegativeButton("Ontbinden", (d, w) -> release(p))
-                .show();
+                + (p.isInjured() ? "\nGeblesseerd: nog " + p.injuryWeeks + " week/weken" : "")
+                + extra;
+        Ui.actionDialog(c, p.name, info,
+                new String[]{isFavorite ? "Niet meer voortrekken" : "⭐ Vraag de manager hem te laten starten",
+                        "Verkopen", "Contract verlengen", "Contract ontbinden"},
+                new int[]{Ui.STYLE_PRIMARY, Ui.STYLE_SECONDARY, Ui.STYLE_SECONDARY, Ui.STYLE_DANGER},
+                new Runnable[]{() -> toggleFavorite(p, isFavorite), () -> sell(p), () -> renew(p), () -> release(p)});
+    }
+
+    private void toggleFavorite(Player p, boolean isFavorite) {
+        Game g = game();
+        if (isFavorite) {
+            g.setFavorite(null);
+            Ui.toast(ctx(), "Je laat de opstelling weer aan de manager over.");
+            refresh();
+            return;
+        }
+        Staff manager = g.human().staff.get(StaffRole.MANAGER);
+        Player current = g.human().favorite();
+        String msg;
+        if (manager == null) {
+            msg = "Er is geen manager, dus " + p.name + " start gewoon als hij fit is.";
+        } else {
+            msg = manager.name + " zet " + p.name + " in de basis zolang hij fit is.\n\n"
+                    + "Zou de manager hem zelf niet opstellen, dan ergert hij zich: +"
+                    + g.frustrationPerForcedMatch() + " per wedstrijd (bij 100 stapt hij op). "
+                    + "Speelt hij op eigen kracht, dan zakt de ergernis weer.\n\n"
+                    + "Huidige verhouding: " + Game.managerMoodLabel(g.human().managerFrustration()) + ".";
+        }
+        if (current != null) msg += "\n\nJe huidige voorkeursspeler " + current.name + " wordt dan niet meer voorgetrokken.";
+        Ui.confirm(ctx(), "Bemoeien met de opstelling", msg, "Doen", () -> {
+            g.setFavorite(p);
+            refresh();
+        });
     }
 
     private void sell(Player p) {

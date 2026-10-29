@@ -47,15 +47,32 @@ public final class MatchEngine {
         for (Player p : club.squad) if (!p.isInjured()) fit.add(p);
         fit.sort(Comparator.comparingInt((Player p) -> -p.skill));
 
+        // Voorkeursspeler van de voorzitter: zou de manager hem zelf ook opstellen?
+        Player favorite = club.human ? club.favorite() : null;
+        if (favorite != null && favorite.isInjured()) favorite = null;
+        boolean forced = false;
+        if (favorite != null) {
+            int better = 0;
+            for (Player p : fit) {
+                if (p == favorite) break;
+                if (p.position == favorite.position) better++;
+            }
+            forced = better >= formation.count(favorite.position);
+        }
+
         // Eerst iedereen op zijn eigen positie
         List<Player> used = new ArrayList<>();
         Player[][] chosen = new Player[Position.values().length][];
         for (Position pos : Position.values()) {
             chosen[pos.ordinal()] = new Player[formation.count(pos)];
             int i = 0;
+            if (forced && pos == favorite.position) {
+                chosen[pos.ordinal()][i++] = favorite;
+                used.add(favorite);
+            }
             for (Player p : fit) {
                 if (i >= chosen[pos.ordinal()].length) break;
-                if (p.position == pos) {
+                if (p.position == pos && !used.contains(p)) {
                     chosen[pos.ordinal()][i++] = p;
                     used.add(p);
                 }
@@ -92,7 +109,7 @@ public final class MatchEngine {
         double manager = (club.staffRating(StaffRole.MANAGER) - 3) * 1.5;
         double attack = att / attWeight - shape * SHAPE_SHIFT + manager;
         double defense = def / defWeight + shape * SHAPE_SHIFT + manager;
-        return new TeamRating(formation, slots, attack, defense);
+        return new TeamRating(formation, slots, attack, defense, forced);
     }
 
     /** Algemene teamsterkte (gemiddelde van aanval en verdediging). */
@@ -135,6 +152,7 @@ public final class MatchEngine {
         f.homeSetup = h.formation.label + ", " + th.label.toLowerCase(Fmt.NL);
         f.awaySetup = a.formation.label + ", " + ta.label.toLowerCase(Fmt.NL);
         f.played = true;
+        f.favoriteForced = (f.home.human && h.favoriteForced) || (f.away.human && a.favoriteForced);
 
         List<Player> homeXI = h.eleven();
         List<Player> awayXI = a.eleven();

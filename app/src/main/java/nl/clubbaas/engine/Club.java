@@ -22,6 +22,11 @@ public class Club implements Serializable {
     Formation formation;
     Tactic tactic;
 
+    // Invloed van de voorzitter: één speler die hij graag ziet starten (0 = niemand).
+    int favoriteId;
+    // Ergernis van de manager over die bemoeienis, 0-100. Bij 100 stapt hij op.
+    int managerFrustration;
+
     // Alleen voor de eigen club
     public Stadium stadium;
     public final EnumMap<StaffRole, Staff> staff = new EnumMap<>(StaffRole.class);
@@ -48,6 +53,17 @@ public class Club implements Serializable {
 
     public Tactic tactic() {
         return tactic == null ? Tactic.NORMAAL : tactic;
+    }
+
+    /** De voorkeursspeler van de voorzitter, of null (ook als hij inmiddels vertrokken is). */
+    public Player favorite() {
+        if (favoriteId == 0) return null;
+        for (Player p : squad) if (p.id == favoriteId) return p;
+        return null;
+    }
+
+    public int managerFrustration() {
+        return managerFrustration;
     }
 
     /** Sterren van een stafrol. AI-clubs hebben altijd gemiddelde staf (3). Geen staf = 0. */

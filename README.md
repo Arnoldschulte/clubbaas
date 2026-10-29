@@ -48,6 +48,11 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 - **Tactiek**: kies een formatie (4-4-2, 4-3-3, 4-5-1, 3-5-2, 5-3-2) en een speelwijze
   (verdedigend, normaal, aanvallend). AI-clubs kiezen elk seizoen de formatie die bij hun
   selectie past en passen hun speelwijze per wedstrijd aan de tegenstander aan.
+- **Bemoeienis met de opstelling**: de manager kiest de basiself, maar je kunt hem vragen één
+  voorkeursspeler te laten starten. Jonge spelers (t/m 23) met 15+ wedstrijden ontwikkelen zich
+  sneller, en spelers met 8+ wedstrijden staan "in de etalage" (+10% op biedingen). Speelt je
+  voorkeursspeler alleen op jouw verzoek, dan ergert de manager zich: +6 plus 3 per ster per
+  wedstrijd, −4 bij elke wedstrijd zonder bemoeienis. Bij 100 stapt hij op.
 - **Inkomsten**: kaartverkoop, horeca & fanshop, sponsor, tv-geld (hogere divisies), prijzengeld.
 - **Uitgaven**: salarissen, staf, uitbreidingen, rente.
 - **Fans** groeien bij winst en promotie; ticketprijs bepaalt hoeveel er komen.
@@ -81,7 +86,6 @@ Spelerswaarde en salaris staan in `Player.baseValue()` en `Player.wageFor()`.
 ## Ideeën voor de volgende stap
 
 - Europese toernooien voor de top 3 van de Topdivisie
-- Zelf de basiself kiezen (nu automatisch per formatie)
 - Conditie en moraal, zodat roteren loont
 - Gele en rode kaarten met schorsingen
 - Onderhandelen over transfersommen (bod / tegenbod)

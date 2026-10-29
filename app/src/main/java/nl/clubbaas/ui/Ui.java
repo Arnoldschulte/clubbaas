@@ -201,6 +201,39 @@ public final class Ui {
                 .show();
     }
 
+    public static final int STYLE_PRIMARY = 0;
+    public static final int STYLE_SECONDARY = 1;
+    public static final int STYLE_DANGER = 2;
+
+    /** Dialoog met tekst en een willekeurig aantal actieknoppen onder elkaar. */
+    public static void actionDialog(Context c, String title, String message,
+                                    String[] labels, int[] styles, Runnable[] actions) {
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int ph = dp(c, 24);
+        box.setPadding(ph, dp(c, 8), ph, 0);
+        box.addView(body(c, message));
+        AlertDialog[] holder = new AlertDialog[1];
+        for (int i = 0; i < labels.length; i++) {
+            final Runnable action = actions[i];
+            View.OnClickListener l = v -> {
+                if (holder[0] != null) holder[0].dismiss();
+                action.run();
+            };
+            Button b = styles[i] == STYLE_PRIMARY ? button(c, labels[i], l)
+                    : styles[i] == STYLE_DANGER ? dangerButton(c, labels[i], l)
+                    : secondaryButton(c, labels[i], l);
+            box.addView(b);
+        }
+        android.widget.ScrollView scroll = new android.widget.ScrollView(c);
+        scroll.addView(box);
+        holder[0] = new AlertDialog.Builder(c)
+                .setTitle(title)
+                .setView(scroll)
+                .setNegativeButton("Sluiten", null)
+                .show();
+    }
+
     public static void info(Context c, String title, String message) {
         new AlertDialog.Builder(c)
                 .setTitle(title)

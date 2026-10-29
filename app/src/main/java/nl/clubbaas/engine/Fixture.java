@@ -19,6 +19,7 @@ public class Fixture implements Serializable {
     public int attendance;      // alleen ingevuld bij thuiswedstrijden van de eigen club
     public String homeSetup;    // bijv. "4-3-3, aanvallend"
     public String awaySetup;
+    public boolean favoriteForced; // de voorkeursspeler van de voorzitter speelde op diens verzoek
     public final List<String> homeScorers = new ArrayList<>();
     public final List<String> awayScorers = new ArrayList<>();
 

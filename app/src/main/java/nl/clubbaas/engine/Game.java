@@ -31,6 +31,10 @@ public class Game implements Serializable {
     private static final long[] TV_WEEKLY = {300_000, 100_000, 30_000, 8_000, 2_000, 500, 0};
     private static final long[] PRIZE = {5_000_000, 1_500_000, 500_000, 150_000, 50_000, 15_000, 5_000};
 
+    /** Vanaf zoveel wedstrijden per seizoen krijgt een speler t/m 23 jaar extra ontwikkeling. */
+    public static final int PLAYING_TIME_BONUS_APPS = 15;
+    /** Vanaf zoveel wedstrijden staat een speler 'in de etalage' en levert hij meer op. */
+    public static final int SHOWCASE_APPS = 8;
     public static final int MAX_SQUAD = 25;
     public static final int MIN_SQUAD = 14;
     private static final int AI_SQUAD = 18;
@@ -259,6 +263,7 @@ public class Game implements Serializable {
                     rep.leagueMatch = f;
                     if (f.home == human) collectGate(f);
                     updateFans(f);
+                    managerReaction(f, rep);
                 }
             }
         }
@@ -272,6 +277,7 @@ public class Game implements Serializable {
                 if (f.involves(human)) {
                     rep.cupMatch = f;
                     rep.cupRoundName = roundName;
+                    managerReaction(f, rep);
                     if (f.home == human) collectGate(f);
                     if (f.winner() == human) {
                         long prize = 5_000L << (cup.rounds.size() - 1);
@@ -492,6 +498,9 @@ public class Game implements Serializable {
             else if (p.age <= 31) d = rng.nextInt(5) - 3;
             else d = -1 - rng.nextInt(6);
 
+            // Jonge spelers die veel spelen, ontwikkelen zich sneller
+            if (p.age <= 23 && p.appearances >= PLAYING_TIME_BONUS_APPS) d += 2;
+
             double extra = p.age <= 28 ? bonus : bonus / 2;
             d += (int) Math.floor(extra) + (rng.nextDouble() < extra - Math.floor(extra) ? 1 : 0);
 
@@ -633,10 +642,16 @@ public class Game implements Serializable {
         int key = seasonYear * 100 + week;
         if (p.saleOfferWeekKey != key) {
             double f = 0.7 + rng.nextDouble() * 0.45;
+            if (isShowcased(p)) f *= 1.10;
             p.saleOffer = Math.max(500, Math.round(p.value() * f / 500.0) * 500);
             p.saleOfferWeekKey = key;
         }
         return p.saleOffer;
+    }
+
+    /** Speelt genoeg om op te vallen bij andere clubs: +10% op verkoopbiedingen. */
+    public static boolean isShowcased(Player p) {
+        return p.appearances >= SHOWCASE_APPS;
     }
 
     public ActionResult sellPlayer(Player p) {
@@ -690,6 +705,66 @@ public class Game implements Serializable {
         human.squad.remove(p);
         addNews("Contract van " + p.name + " ontbonden.");
         return ActionResult.ok(p.name + " is vertrokken.");
+    }
+
+    // ---- Invloed van de voorzitter ----------------------------------------------------
+
+    public static final int FRUSTRATION_WARNING = 50;
+    public static final int FRUSTRATION_DANGER = 80;
+    public static final int FRUSTRATION_RESIGN = 100;
+
+    /** Vraag de manager om deze speler te laten starten (null = niemand meer voortrekken). */
+    public void setFavorite(Player p) {
+        human.favoriteId = p == null ? 0 : p.id;
+    }
+
+    /** Hoeveel ergernis het kost als de voorkeursspeler alleen op verzoek speelt. */
+    public int frustrationPerForcedMatch() {
+        Staff m = human.staff.get(StaffRole.MANAGER);
+        return m == null ? 0 : 6 + 3 * m.rating;
+    }
+
+    public static String managerMoodLabel(int frustration) {
+        if (frustration < 25) return "Uitstekend";
+        if (frustration < FRUSTRATION_WARNING) return "Goed";
+        if (frustration < FRUSTRATION_DANGER) return "Gespannen";
+        return "Op knappen";
+    }
+
+    /**
+     * Na elke eigen wedstrijd: speelde de voorkeursspeler alleen op verzoek, dan groeit de ergernis
+     * van de manager (een betere manager heeft een groter ego). Anders zakt die langzaam weer.
+     */
+    private void managerReaction(Fixture f, WeekReport rep) {
+        Staff manager = human.staff.get(StaffRole.MANAGER);
+        if (manager == null) {
+            human.managerFrustration = 0;
+            return;
+        }
+        int before = human.managerFrustration;
+        if (f.favoriteForced) {
+            human.managerFrustration = Math.min(FRUSTRATION_RESIGN, before + frustrationPerForcedMatch());
+        } else {
+            human.managerFrustration = Math.max(0, before - 4);
+        }
+        int now = human.managerFrustration;
+        if (now >= FRUSTRATION_RESIGN) {
+            human.staff.remove(StaffRole.MANAGER);
+            human.managerFrustration = 0;
+            human.favoriteId = 0;
+            String msg = manager.name + " stapt op als manager: \"Ik laat me niet de opstelling voorschrijven.\" "
+                    + "Zoek snel een nieuwe manager.";
+            addNews(msg);
+            rep.messages.add(msg);
+        } else if (before < FRUSTRATION_DANGER && now >= FRUSTRATION_DANGER) {
+            String msg = manager.name + " dreigt op te stappen als je je met de opstelling blijft bemoeien.";
+            addNews(msg);
+            rep.messages.add(msg);
+        } else if (before < FRUSTRATION_WARNING && now >= FRUSTRATION_WARNING) {
+            String msg = manager.name + " ergert zich aan je bemoeienis met de opstelling.";
+            addNews(msg);
+            rep.messages.add(msg);
+        }
     }
 
     // ---- Tactiek ----------------------------------------------------------------------
@@ -761,6 +836,7 @@ public class Game implements Serializable {
         if (current != null) addMoney("Afkoopsommen", -current.severance());
         addMoney("Tekengeld", -s.signingFee());
         human.staff.put(s.role, s);
+        if (s.role == StaffRole.MANAGER) human.managerFrustration = 0;
         list.remove(s);
         addNews(s.name + " is aangesteld als " + s.role.label.toLowerCase(Fmt.NL) + " " + s.stars() + ".");
         return ActionResult.ok(s.name + " is aangesteld.");
@@ -772,6 +848,7 @@ public class Game implements Serializable {
         if (human.money < current.severance()) return ActionResult.fail("Te weinig geld voor de afkoopsom.");
         addMoney("Afkoopsommen", -current.severance());
         human.staff.remove(role);
+        if (role == StaffRole.MANAGER) human.managerFrustration = 0;
         addNews(current.name + " is ontslagen als " + role.label.toLowerCase(Fmt.NL) + ".");
         return ActionResult.ok(current.name + " is ontslagen.");
     }

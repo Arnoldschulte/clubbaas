@@ -109,6 +109,62 @@ public class GameTest {
         return f.homeGoals + f.awayGoals;
     }
 
+    /** De zwakste fitte speler van de selectie: die zou de manager zelf nooit opstellen. */
+    private static Player weakestPlayer(Club c) {
+        Player worst = null;
+        for (Player p : c.squad) {
+            if (p.position != Position.DOELMAN && (worst == null || p.skill < worst.skill)) worst = p;
+        }
+        return worst;
+    }
+
+    @Test
+    public void favoriteStartsEvenIfManagerWouldNotPickHim() {
+        Game g = newGame();
+        Club me = g.human();
+        Player bench = weakestPlayer(me);
+        bench.skill = 1;
+        assertFalse(MatchEngine.rate(me).eleven().contains(bench));
+        g.setFavorite(bench);
+        TeamRating r = MatchEngine.rate(me);
+        assertTrue(r.eleven().contains(bench));
+        assertTrue(r.favoriteForced);
+        assertEquals(11, r.slots.size());
+    }
+
+    @Test
+    public void managerResignsAfterTooMuchMeddling() {
+        Game g = newGame();
+        Club me = g.human();
+        Player bench = weakestPlayer(me);
+        bench.skill = 1;
+        g.setFavorite(bench);
+        boolean resigned = false;
+        for (int i = 0; i < 20 && !resigned; i++) {
+            bench.injuryWeeks = 0;
+            g.advanceWeek();
+            resigned = me.staff.get(StaffRole.MANAGER) == null;
+        }
+        assertTrue("manager had moeten opstappen", resigned);
+        assertEquals(0, me.managerFrustration());
+        assertTrue(me.favorite() == null);
+    }
+
+    @Test
+    public void noFrustrationWhenFavoriteWouldStartAnyway() {
+        Game g = newGame();
+        Club me = g.human();
+        Player star = MatchEngine.rate(me).eleven().get(0);
+        star.skill = 99;
+        g.setFavorite(star);
+        for (int i = 0; i < 10; i++) {
+            star.injuryWeeks = 0;
+            g.advanceWeek();
+        }
+        assertEquals(0, me.managerFrustration());
+        assertNotNull(me.staff.get(StaffRole.MANAGER));
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();
