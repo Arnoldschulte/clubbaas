@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Eenvoudige voetbal op een geel 'kampioens'-lint -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#F2B705"
+        android:pathData="M30,74 L78,74 L78,80 L30,80 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,52 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0 Z" />
+    <path
+        android:fillColor="#123F23"
+        android:pathData="M54,44 L61.6,49.5 L58.7,58.5 L49.3,58.5 L46.4,49.5 Z" />
+    <path
+        android:strokeColor="#123F23"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M54,44 L54,31 M61.6,49.5 L74,45.5 M58.7,58.5 L66,69 M49.3,58.5 L42,69 M46.4,49.5 L34,45.5" />
+</vector>

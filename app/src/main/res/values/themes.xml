@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pitch">#1E6B3A</color>
+    <color name="pitch_dark">#123F23</color>
+    <color name="background">#F1F4EF</color>
+
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/pitch</item>
+        <item name="android:colorPrimaryDark">@color/pitch_dark</item>
+        <item name="android:colorAccent">@color/pitch</item>
+        <item name="android:statusBarColor">@color/pitch_dark</item>
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+</resources>

@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'nl.clubbaas'
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = 'nl.clubbaas'
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 1
+        versionName = '1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+// De app zelf gebruikt alleen de standaard Android SDK; JUnit is alleen voor de unittests.
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
