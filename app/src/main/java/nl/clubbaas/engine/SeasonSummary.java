@@ -16,6 +16,7 @@ public class SeasonSummary implements Serializable {
     public long prizeMoney;
     public final List<String> champions = new ArrayList<>();
     public String cupWinner;
+    public String boardVerdict;
 
     public String text() {
         StringBuilder sb = new StringBuilder();
@@ -24,6 +25,7 @@ public class SeasonSummary implements Serializable {
         sb.append(outcome).append("\n");
         sb.append(Cup.NAME).append(": ").append(cupResult).append("\n");
         sb.append("Prijzengeld: ").append(Fmt.money(prizeMoney)).append("\n\n");
+        if (boardVerdict != null) sb.append("Bestuur: ").append(boardVerdict).append("\n\n");
         sb.append("Kampioenen:\n");
         for (String c : champions) sb.append("• ").append(c).append("\n");
         if (cupWinner != null) sb.append("\nBekerwinnaar: ").append(cupWinner);

@@ -69,6 +69,12 @@ public class Game implements Serializable {
     private String gameOverReason;
     private boolean liveDisabled; // instelling: live verslag uit (standaard aan)
     private List<Loan> loans;     // uitgeleende spelers (null in oude savegames)
+
+    // Bestuur en supporters (boardInit = false in oude savegames)
+    private boolean boardInit;
+    BoardObjective boardObjective;    // package-private voor tests
+    int boardConfidence;
+    int supporterMood;
     private int nextPlayerId = 1;
     private int nextClubId = 1;
 
@@ -79,6 +85,8 @@ public class Game implements Serializable {
         createWorld(clubName.trim().isEmpty() ? "FC Clubbaas" : clubName.trim(), clubColor);
         startSeasonCommon();
         generateSponsorOffers();
+        ensureBoard();
+        addNews("Doel van het bestuur dit seizoen: " + boardObjective.label.toLowerCase(Fmt.NL) + ".");
         addNews("Welkom, " + chairmanName + "! Je bent de nieuwe voorzitter van " + human.name
                 + ". Het doel: van de " + DIVISION_NAMES[DIVISIONS - 1] + " naar de top.");
     }
@@ -236,7 +244,7 @@ public class Game implements Serializable {
     public int expectedAttendance(int price) {
         double factor = Math.pow(FAIR_PRICE[human.level - 1] / (double) Math.max(1, price), 1.5);
         factor = Math.max(0.15, Math.min(1.4, factor));
-        int demand = (int) (human.fans * factor);
+        int demand = (int) (human.fans * factor * supporterAttendanceFactor());
         return Math.min(human.stadium.effectiveCapacity(), demand);
     }
 
@@ -289,6 +297,7 @@ public class Game implements Serializable {
                     rep.leagueMatch = f;
                     if (f.home == human) collectGate(f);
                     updateFans(f);
+                    supportersAfterMatch(f);
                     managerReaction(f, rep);
                     reportCards(f, rep);
                     if (f.winner() == human && human.sponsorDeal != null && human.sponsorDeal.winBonus > 0) {
@@ -345,11 +354,15 @@ public class Game implements Serializable {
         }
 
         checkBankruptcy(rep);
+        if (!gameOver) weeklyBoard(rep);
 
-        if (week == WEEKS_PER_SEASON) {
+        if (week == WEEKS_PER_SEASON && !gameOver) {
             seasonOver = true;
             lastSummary = buildSeasonSummary();
             rep.seasonSummary = lastSummary;
+            if (boardConfidence <= 0) {
+                fire(rep, "Na dit seizoen heeft het bestuur genoeg gezien: je bent ontslagen.");
+            }
         }
         return rep;
     }
@@ -484,6 +497,8 @@ public class Game implements Serializable {
             s.champions.add(div.name + ": " + div.sortedTable().get(0).club.name);
         }
         s.cupWinner = cup.winner == null ? null : cup.winner.name;
+        boolean promoted = human.level > 1 && pos <= PROMOTION_SPOTS;
+        s.boardVerdict = boardSeasonVerdict(pos, promoted, cup.winner == human);
 
         Player top = human.topScorer();
         String shortOutcome = s.outcome.startsWith("LANDS") ? "Landskampioen"
@@ -556,6 +571,10 @@ public class Game implements Serializable {
 
         seasonYear++;
         startSeasonCommon();
+        ensureBoard();
+        setBoardObjective();
+        addNews("Doel van het bestuur dit seizoen: " + boardObjective.label.toLowerCase(Fmt.NL)
+                + ". Vertrouwen: " + confidenceLabel(boardConfidence).toLowerCase(Fmt.NL) + ".");
         SponsorDeal deal = human.sponsorDeal;
         if (deal != null && deal.seasonsLeft > 1) {
             deal.seasonsLeft--;
@@ -881,6 +900,9 @@ public class Game implements Serializable {
         p.moraleInit = false;     // speeltijd begint bij de verwachting voor zijn rol
         p.transferRequested = false;
         p.negoWeekKey = -1;
+        // Een grote aankoop maakt de supporters blij
+        long avgValue = human.squad.isEmpty() ? 0 : human.totalSquadValue() / human.squad.size();
+        if (price > 0 && price >= avgValue * 3) adjustSupporters(3);
         human.squad.add(p);
         addNews(p.name + " tekent bij " + human.name + (seller != null ? " (over van " + seller.name + ")" : "")
                 + " voor " + Fmt.money(price) + ".");
@@ -1015,6 +1037,12 @@ public class Game implements Serializable {
     }
 
     private void completeSale(Player p, Club buyer, long price) {
+        boolean wasBest = true;
+        for (Player q : human.squad) if (q != p && q.skill > p.skill) wasBest = false;
+        if (wasBest) {
+            adjustSupporters(-6);
+            addNews("De supporters zijn boos dat hun beste speler, " + p.name + ", wordt verkocht.");
+        }
         human.squad.remove(p);
         bids().removeIf(b -> b.player == p);
         if (human.favorite() == null && human.favoriteId == p.id) human.favoriteId = 0;
@@ -1074,6 +1102,144 @@ public class Game implements Serializable {
         human.squad.remove(p);
         addNews("Contract van " + p.name + " ontbonden.");
         return ActionResult.ok(p.name + " is vertrokken.");
+    }
+
+    // ---- Bestuur en supporters --------------------------------------------------------
+
+    public static final int BOARD_START = 65;
+    public static final int BOARD_WARNING = 30;
+    public static final int SUPPORTERS_NEUTRAL = 60;
+
+    private void ensureBoard() {
+        if (boardInit) return;
+        boardInit = true;
+        boardConfidence = BOARD_START;
+        supporterMood = SUPPORTERS_NEUTRAL;
+        setBoardObjective();
+    }
+
+    public BoardObjective boardObjective() {
+        ensureBoard();
+        return boardObjective;
+    }
+
+    public int boardConfidence() {
+        ensureBoard();
+        return boardConfidence;
+    }
+
+    public int supporterMood() {
+        ensureBoard();
+        return supporterMood;
+    }
+
+    public static String confidenceLabel(int c) {
+        if (c >= 80) return "Groot vertrouwen";
+        if (c >= 55) return "Tevreden";
+        if (c >= BOARD_WARNING) return "Twijfels";
+        return "Je positie staat op het spel";
+    }
+
+    public static String supporterLabel(int m) {
+        if (m >= 80) return "Euforisch";
+        if (m >= 60) return "Positief";
+        if (m >= 40) return "Kritisch";
+        return "Boos";
+    }
+
+    /** Het doel hangt af van hoe sterk je selectie is vergeleken met de rest van de divisie. */
+    private void setBoardObjective() {
+        List<Club> clubs = new ArrayList<>(humanDivision().clubs);
+        clubs.sort((a, b) -> Double.compare(MatchEngine.strength(b), MatchEngine.strength(a)));
+        int rank = clubs.indexOf(human) + 1;
+        if (rank <= 2) {
+            boardObjective = human.level > 1 ? BoardObjective.PROMOTIE
+                    : rank == 1 ? BoardObjective.KAMPIOEN : BoardObjective.TOP3;
+        } else if (rank <= 6) {
+            boardObjective = BoardObjective.BOVENSTE_HELFT;
+        } else {
+            boardObjective = BoardObjective.HANDHAVING;
+        }
+    }
+
+    private void changeConfidence(int delta) {
+        // In je eerste seizoen geeft het bestuur je de tijd
+        int floor = human.history.isEmpty() ? 25 : 0;
+        boardConfidence = Math.max(Math.min(floor, boardConfidence), Math.min(100, boardConfidence + delta));
+    }
+
+    /** Toeschouwersfactor door de stemming van de supporters: 0,85 tot 1,15. */
+    double supporterAttendanceFactor() {
+        return 0.85 + 0.3 * supporterMood() / 100.0;
+    }
+
+    /** Na een eigen competitiewedstrijd: supporters reageren op het resultaat. */
+    private void supportersAfterMatch(Fixture f) {
+        ensureBoard();
+        String r = f.resultFor(human);
+        supporterMood += r.equals("W") ? 4 : r.equals("V") ? -4 : 0;
+        supporterMood = Math.max(0, Math.min(100, supporterMood));
+    }
+
+    private void adjustSupporters(int delta) {
+        ensureBoard();
+        supporterMood = Math.max(0, Math.min(100, supporterMood + delta));
+    }
+
+    /** Wekelijks: ticketprijs, terugveren naar neutraal, en het bestuur kijkt naar de stand. */
+    private void weeklyBoard(WeekReport rep) {
+        ensureBoard();
+        int price = human.stadium.ticketPrice;
+        int fair = fairPrice();
+        if (price > fair * 1.3) supporterMood -= 2;
+        else if (price < fair * 0.8) supporterMood += 1;
+        supporterMood += (int) Math.round((SUPPORTERS_NEUTRAL - supporterMood) * 0.05);
+        supporterMood = Math.max(0, Math.min(100, supporterMood));
+
+        int before = boardConfidence;
+        if (week >= 6) {
+            int pos = humanDivision().positionOf(human);
+            int target = boardObjective.targetPosition;
+            if (pos <= target) changeConfidence(1);
+            else if (pos > target + 3) changeConfidence(-2);
+        }
+        if (human.money < 0) changeConfidence(-2);
+        if (supporterMood >= 75) changeConfidence(1);
+        else if (supporterMood < 30 && week % 2 == 0) changeConfidence(-1);
+
+        if (before >= BOARD_WARNING && boardConfidence < BOARD_WARNING) {
+            String msg = "Het bestuur maakt zich zorgen. Doel: " + boardObjective.label.toLowerCase(Fmt.NL)
+                    + ". Zonder verbetering kost dit je je baan.";
+            addNews(msg);
+            rep.messages.add(msg);
+        }
+        if (boardConfidence <= 0) fire(rep, "Het bestuur heeft het vertrouwen in je opgezegd en je ontslagen.");
+    }
+
+    /** Einde seizoen: het bestuur beoordeelt het resultaat. Geeft het oordeel terug. */
+    private String boardSeasonVerdict(int pos, boolean promoted, boolean cupWon) {
+        ensureBoard();
+        int target = boardObjective.targetPosition;
+        String verdict;
+        if (pos <= target) {
+            int bonus = 15 + (target - pos >= 3 || (promoted && boardObjective != BoardObjective.PROMOTIE) ? 10 : 0);
+            changeConfidence(bonus);
+            verdict = "Doel gehaald (" + boardObjective.label.toLowerCase(Fmt.NL) + "). Het bestuur is tevreden.";
+        } else {
+            changeConfidence(-Math.min(35, 5 * (pos - target)));
+            verdict = "Doel niet gehaald (" + boardObjective.label.toLowerCase(Fmt.NL) + ", " + pos + "e geworden).";
+        }
+        if (cupWon) changeConfidence(10);
+        verdict += " Vertrouwen: " + confidenceLabel(boardConfidence).toLowerCase(Fmt.NL) + ".";
+        return verdict;
+    }
+
+    private void fire(WeekReport rep, String reason) {
+        if (gameOver) return;
+        gameOver = true;
+        gameOverReason = reason + " Je was " + human.history.size() + " seizoen(en) voorzitter van " + human.name + ".";
+        addNews(gameOverReason);
+        if (rep != null) rep.gameOver = true;
     }
 
     // ---- Uitlenen ---------------------------------------------------------------------

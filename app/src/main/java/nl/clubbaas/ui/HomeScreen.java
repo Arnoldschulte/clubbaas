@@ -108,6 +108,12 @@ public class HomeScreen extends Screen {
         status.addView(Ui.keyValue(c, "Fans", Fmt.number(me.fans)));
         status.addView(Ui.keyValue(c, "Teamsterkte", String.valueOf(Math.round(MatchEngine.strength(me)))));
         status.addView(Ui.keyValue(c, Cup.NAME, g.humanCupResult()));
+        LinearLayout board = Ui.keyValue(c, "Bestuur (" + g.boardObjective().label.toLowerCase(Fmt.NL) + ")",
+                Game.confidenceLabel(g.boardConfidence()));
+        if (g.boardConfidence() < Game.BOARD_WARNING) ((TextView) board.getChildAt(1)).setTextColor(Ui.BAD);
+        board.setOnClickListener(v -> act.show(new ClubScreen(act)));
+        status.addView(board);
+        status.addView(Ui.keyValue(c, "Supporters", Game.supporterLabel(g.supporterMood())));
         int squadMorale = g.squadMorale();
         status.addView(Ui.keyValue(c, "Sfeer in de selectie",
                 nl.clubbaas.engine.Player.moraleEmoji(squadMorale) + " "
@@ -173,7 +179,9 @@ public class HomeScreen extends Screen {
         WeekReport r = game().advanceWeek();
         refresh();
         if (r.gameOver) {
-            Ui.info(ctx(), "Failliet", game().gameOverReason());
+            String text = game().gameOverReason();
+            if (r.seasonSummary != null) text = r.seasonSummary.text() + "\n\n" + text;
+            Ui.info(ctx(), "Einde verhaal", text);
         } else if (r.newSeasonStarted) {
             Ui.info(ctx(), "Nieuw seizoen", join(r.messages));
         } else if (game().isLiveEnabled() && r.leagueMatch != null) {
@@ -193,7 +201,7 @@ public class HomeScreen extends Screen {
             last = g.advanceWeek();
         }
         refresh();
-        if (g.isGameOver()) Ui.info(ctx(), "Failliet", g.gameOverReason());
+        if (g.isGameOver()) Ui.info(ctx(), "Einde verhaal", g.gameOverReason());
         else if (last != null && last.seasonSummary != null) Ui.info(ctx(), "Einde seizoen", last.seasonSummary.text());
     }
 

@@ -620,6 +620,66 @@ public class GameTest {
         assertTrue(bidSeen);
     }
 
+    // ---- Bestuur en supporters --------------------------------------------------------
+
+    @Test
+    public void boardSetsAmbitiousGoalForStrongSquad() {
+        Game g = newGame();
+        assertNotNull(g.boardObjective());
+        playSeason(g);
+        for (Player p : g.human().squad) p.skill = 95;
+        g.advanceWeek(); // nieuw seizoen, nieuw doel
+        BoardObjective o = g.boardObjective();
+        assertTrue(o == BoardObjective.PROMOTIE || o == BoardObjective.KAMPIOEN);
+    }
+
+    @Test
+    public void meetingTheGoalRaisesConfidence() {
+        Game g = newGame();
+        for (Player p : g.human().squad) p.skill = 95;
+        int before = g.boardConfidence();
+        playSeason(g);
+        assertTrue(g.boardConfidence() > before);
+    }
+
+    @Test
+    public void chairmanIsFiredWhenConfidenceRunsOut() {
+        Game g = newGame();
+        // Niet meer in het proefseizoen
+        g.human().history.add(new SeasonRecord("2025/26", "Vijfde Klasse", 12, "-", "-", ""));
+        g.boardConfidence();          // initialiseren
+        g.boardConfidence = 5;
+        g.boardObjective = BoardObjective.KAMPIOEN;
+        for (Player p : g.human().squad) p.skill = 1;
+        for (int i = 0; i < Game.WEEKS_PER_SEASON && !g.isGameOver(); i++) g.advanceWeek();
+        assertTrue(g.isGameOver());
+        assertTrue(g.gameOverReason().contains("ontslagen"));
+    }
+
+    @Test
+    public void newChairmanCannotBeFiredInFirstSeason() {
+        Game g = newGame();
+        g.boardConfidence();
+        g.boardObjective = BoardObjective.KAMPIOEN;
+        for (Player p : g.human().squad) p.skill = 1;
+        for (int i = 0; i < Game.WEEKS_PER_SEASON - 1; i++) g.advanceWeek();
+        assertFalse(g.isGameOver());
+        assertTrue(g.boardConfidence() >= 25);
+    }
+
+    @Test
+    public void happySupportersBringMoreSpectators() {
+        Game g = newGame();
+        g.human().stadium.capacity = 1_000_000;
+        g.human().fans = 5000;
+        g.supporterMood();
+        g.supporterMood = 100;
+        int happy = g.expectedAttendance(g.fairPrice());
+        g.supporterMood = 0;
+        int angry = g.expectedAttendance(g.fairPrice());
+        assertTrue(happy > angry);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

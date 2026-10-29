@@ -73,6 +73,11 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 - **Sponsor**: zonder lopend contract kies je elk seizoen uit drie aanbiedingen: meerjarig
   (95%, vast voor 3 seizoenen), eenjarig (100%) of prestatie (60% + bonus per overwinning en
   bij promotie). Kies je niet, dan tekent het bestuur het eenjarige aanbod.
+- **Bestuur**: stelt elk seizoen een doel op basis van de sterkte van je selectie (kampioen,
+  promotie, top 3, bovenste helft of handhaving). Het vertrouwen hangt af van je positie,
+  rood staan, de supporters en het eindresultaat. Op nul = ontslagen (niet in je eerste seizoen).
+- **Supporters** reageren op resultaten, ticketprijzen en transfers (je beste speler verkopen
+  valt slecht, een grote aankoop goed). Hun stemming bepaalt het publiek mee (±15%).
 - **Onderhandelen**: bij aankoop heeft de verkoper een verborgen minimumprijs. Genoeg geboden =
   rond; in de buurt = tegenbod (max. 3 rondes); te laag = deze week geen gesprek meer. Je kunt
   ook spelers van andere clubs kopen (basisspelers en hogere clubs zijn duurder). Bij verkoop
@@ -87,7 +92,8 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 - **Fans** groeien bij winst en promotie; ticketprijs bepaalt hoeveel er komen.
 - **Einde seizoen**: spelers worden ouder en ontwikkelen zich (trainer + trainingscomplex helpen),
   oude spelers stoppen, aflopende contracten vertrekken, jeugdacademie levert talenten.
-- **Faillissement** als je 8 weken achter elkaar rood staat.
+- **Faillissement** als je 8 weken achter elkaar rood staat, **ontslag** als het bestuur geen
+  vertrouwen meer heeft.
 
 ## De matchengine
 
