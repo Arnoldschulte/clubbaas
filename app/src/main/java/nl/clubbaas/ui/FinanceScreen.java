@@ -12,6 +12,7 @@ import nl.clubbaas.engine.Club;
 import nl.clubbaas.engine.Fmt;
 import nl.clubbaas.engine.Game;
 import nl.clubbaas.engine.Ledger;
+import nl.clubbaas.engine.SponsorDeal;
 
 /** Kasboek per week en per seizoen, plus de bank. */
 public class FinanceScreen extends Screen {
@@ -47,6 +48,7 @@ public class FinanceScreen extends Screen {
         }
         root.addView(overview);
 
+        root.addView(sponsorCard(c, g, me));
         root.addView(ledgerCard(c, "Deze week", me.ledger.week()));
         root.addView(ledgerCard(c, "Dit seizoen", me.ledger.season()));
 
@@ -60,6 +62,36 @@ public class FinanceScreen extends Screen {
             bank.addView(Ui.secondaryButton(c, "Los " + Fmt.money(repay) + " af", v -> act(g.repay(repay))));
         }
         root.addView(bank);
+    }
+
+    private LinearLayout sponsorCard(Context c, Game g, Club me) {
+        LinearLayout card = Ui.card(c, "Sponsor");
+        if (!me.sponsorOffers().isEmpty()) {
+            card.addView(Ui.text(c, "Kies een sponsor voor dit seizoen", 16, Ui.TEXT, true));
+            card.addView(Ui.muted(c, "Kies je niet vóór de eerste speelweek, dan tekent het bestuur het eenjarige aanbod."));
+            for (SponsorDeal d : me.sponsorOffers()) {
+                LinearLayout offer = new LinearLayout(c);
+                offer.setOrientation(LinearLayout.VERTICAL);
+                offer.setPadding(0, Ui.dp(c, 12), 0, 0);
+                offer.addView(Ui.text(c, d.type.label + ": " + d.sponsor, 15, Ui.PRIMARY, true));
+                offer.addView(Ui.body(c, d.description()));
+                offer.addView(Ui.secondaryButton(c, "Kies " + d.sponsor, v -> act(g.chooseSponsor(d))));
+                card.addView(offer);
+            }
+            return card;
+        }
+        SponsorDeal deal = me.sponsorDeal();
+        if (deal == null) {
+            card.addView(Ui.keyValue(c, "Sponsorgeld", Fmt.money(me.sponsorPerSeason) + " per seizoen"));
+            card.addView(Ui.muted(c, "Volgend seizoen kun je kiezen uit nieuwe aanbiedingen."));
+            return card;
+        }
+        card.addView(Ui.keyValue(c, deal.sponsor, deal.type.label));
+        card.addView(Ui.body(c, deal.description()));
+        if (deal.type == SponsorDeal.Type.MEERJARIG) {
+            card.addView(Ui.muted(c, "Nog " + deal.seasonsLeft + " seizoen(en) inclusief dit seizoen."));
+        }
+        return card;
     }
 
     private LinearLayout ledgerCard(Context c, String title, Map<String, Long> entries) {

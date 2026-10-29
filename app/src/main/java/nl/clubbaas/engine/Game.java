@@ -76,6 +76,7 @@ public class Game implements Serializable {
         this.seasonYear = startYear;
         createWorld(clubName.trim().isEmpty() ? "FC Clubbaas" : clubName.trim(), clubColor);
         startSeasonCommon();
+        generateSponsorOffers();
         addNews("Welkom, " + chairmanName + "! Je bent de nieuwe voorzitter van " + human.name
                 + ". Het doel: van de " + DIVISION_NAMES[DIVISIONS - 1] + " naar de top.");
     }
@@ -252,6 +253,15 @@ public class Game implements Serializable {
             return rep;
         }
 
+        if (!human.sponsorOffers().isEmpty()) {
+            SponsorDeal pick = null;
+            for (SponsorDeal d : human.sponsorOffers()) if (d.type == SponsorDeal.Type.EENJARIG) pick = d;
+            if (pick == null) pick = human.sponsorOffers().get(0);
+            chooseSponsor(pick);
+            rep.messages.add("Je hebt geen sponsor gekozen. Het bestuur tekende het eenjarige aanbod van "
+                    + pick.sponsor + ".");
+        }
+
         week++;
         human.ledger.startWeek();
         Map<Integer, Integer> appearancesBefore = new HashMap<>();
@@ -270,6 +280,9 @@ public class Game implements Serializable {
                     if (f.home == human) collectGate(f);
                     updateFans(f);
                     managerReaction(f, rep);
+                    if (f.winner() == human && human.sponsorDeal != null && human.sponsorDeal.winBonus > 0) {
+                        addMoney("Sponsorbonus", human.sponsorDeal.winBonus);
+                    }
                 }
             }
         }
@@ -416,6 +429,12 @@ public class Game implements Serializable {
         s.cupResult = humanCupResult;
         s.prizeMoney = PRIZE[human.level - 1] * (CLUBS_PER_DIVISION + 1 - pos) / CLUBS_PER_DIVISION;
         addMoney("Prijzengeld", s.prizeMoney);
+        boolean success = pendingFanFactor > 1.0; // promotie of landstitel
+        SponsorDeal deal = human.sponsorDeal;
+        if (success && deal != null && deal.promotionBonus > 0) {
+            addMoney("Sponsorbonus", deal.promotionBonus);
+            addNews(deal.sponsor + " keert een bonus uit van " + Fmt.money(deal.promotionBonus) + "!");
+        }
         for (Division div : divisions) {
             s.champions.add(div.name + ": " + div.sortedTable().get(0).club.name);
         }
@@ -485,12 +504,21 @@ public class Game implements Serializable {
         }
         human.fans = capFans((int) (human.fans * pendingFanFactor));
         pendingFanFactor = 1.0;
-        human.sponsorPerSeason = sponsorOffer();
 
         seasonYear++;
         startSeasonCommon();
-        addNews("Nieuw seizoen " + seasonLabel() + ". Sponsorcontract: "
-                + Fmt.money(human.sponsorPerSeason) + " per seizoen.");
+        SponsorDeal deal = human.sponsorDeal;
+        if (deal != null && deal.seasonsLeft > 1) {
+            deal.seasonsLeft--;
+            human.sponsorPerSeason = deal.perSeason;
+            addNews("Nieuw seizoen " + seasonLabel() + ". " + deal.sponsor + " blijft sponsor ("
+                    + Fmt.money(deal.perSeason) + ", nog " + deal.seasonsLeft + " seizoen(en)).");
+        } else {
+            human.sponsorDeal = null;
+            generateSponsorOffers();
+            addNews("Nieuw seizoen " + seasonLabel() + ". Er liggen drie sponsoraanbiedingen klaar: "
+                    + "kies er een bij Financiën.");
+        }
     }
 
     private void agePlayers(Club c) {
@@ -584,6 +612,31 @@ public class Game implements Serializable {
             sb.append(p.name).append(" (").append(p.position.code).append(")");
         }
         if (sb.length() > 0) addNews("Nieuwe talenten uit de jeugdopleiding: " + sb + ".");
+    }
+
+    private void generateSponsorOffers() {
+        long base = sponsorOffer();
+        List<SponsorDeal> offers = human.sponsorOffers();
+        offers.clear();
+        offers.add(new SponsorDeal(names.sponsorName(rng), SponsorDeal.Type.MEERJARIG,
+                round1000(base * 0.95), 0, 0, 3));
+        offers.add(new SponsorDeal(names.sponsorName(rng), SponsorDeal.Type.EENJARIG, base, 0, 0, 1));
+        offers.add(new SponsorDeal(names.sponsorName(rng), SponsorDeal.Type.PRESTATIE,
+                round1000(base * 0.6), round1000(base * 0.035), round1000(base * 0.5), 1));
+        human.sponsorPerSeason = base; // indicatie tot er gekozen is
+    }
+
+    private static long round1000(double v) {
+        return Math.round(v / 1000.0) * 1000;
+    }
+
+    public ActionResult chooseSponsor(SponsorDeal deal) {
+        if (!human.sponsorOffers().contains(deal)) return ActionResult.fail("Dit aanbod is niet meer geldig.");
+        human.sponsorDeal = deal;
+        human.sponsorPerSeason = deal.perSeason;
+        human.sponsorOffers().clear();
+        addNews(deal.sponsor + " is de nieuwe sponsor (" + deal.type.label.toLowerCase(Fmt.NL) + ").");
+        return ActionResult.ok(deal.sponsor + " is je nieuwe sponsor!");
     }
 
     private long sponsorOffer() {

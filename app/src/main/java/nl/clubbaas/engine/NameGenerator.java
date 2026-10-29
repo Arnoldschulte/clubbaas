@@ -40,7 +40,18 @@ public class NameGenerator implements Serializable {
             "El Amrani", "Bouzid", "Mensah", "Asante", "Costa", "Silva", "Novak", "Kowalski", "Larsen",
             "Nilsson", "Okafor", "Martens", "Claes", "Peeters", "Lambrecht", "Hansen", "Moreau"};
 
+    private static final String[] SPONSOR_START = {
+            "Bakkerij", "Autobedrijf", "Brouwerij", "Installatiebedrijf", "Transport", "Bouwbedrijf",
+            "Verzekeringen", "Makelaardij", "Tuincentrum", "Drukkerij", "Energie", "Zuivel"};
+    private static final String[] SPONSOR_END = {
+            "De Molen", "Noorderlicht", "Het Anker", "De Eik", "Polderman", "Zonnegloed", "De Vaart",
+            "Kroonstad", "Horizon", "De Linde", "Tulpenhof", "Waddenzicht"};
+
     private final Set<String> usedClubNames = new HashSet<>();
+
+    public String sponsorName(Random rng) {
+        return SPONSOR_START[rng.nextInt(SPONSOR_START.length)] + " " + SPONSOR_END[rng.nextInt(SPONSOR_END.length)];
+    }
 
     public String town(Random rng) {
         return TOWN_START[rng.nextInt(TOWN_START.length)] + TOWN_END[rng.nextInt(TOWN_END.length)];

@@ -34,6 +34,9 @@ public class Club implements Serializable {
     public long loan;
     public int fans;
     public long sponsorPerSeason;
+    // Lopend sponsorcontract en openstaande aanbiedingen (null in oude savegames)
+    SponsorDeal sponsorDeal;
+    List<SponsorDeal> sponsorOffers;
     public int lastAttendance;
     public int negativeWeeks;
     public final Ledger ledger = new Ledger();
@@ -60,6 +63,16 @@ public class Club implements Serializable {
         if (favoriteId == 0) return null;
         for (Player p : squad) if (p.id == favoriteId) return p;
         return null;
+    }
+
+    public SponsorDeal sponsorDeal() {
+        return sponsorDeal;
+    }
+
+    /** Openstaande sponsoraanbiedingen (leeg als er een contract loopt). */
+    public List<SponsorDeal> sponsorOffers() {
+        if (sponsorOffers == null) sponsorOffers = new ArrayList<>();
+        return sponsorOffers;
     }
 
     public int managerFrustration() {

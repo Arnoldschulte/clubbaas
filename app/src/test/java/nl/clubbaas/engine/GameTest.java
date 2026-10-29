@@ -266,6 +266,51 @@ public class GameTest {
         assertEquals(s.capacity, s.effectiveCapacity());
     }
 
+    // ---- Sponsor ----------------------------------------------------------------------
+
+    @Test
+    public void newGameOffersThreeSponsorDealsAndAutoPicksOneYear() {
+        Game g = newGame();
+        assertEquals(3, g.human().sponsorOffers().size());
+        g.advanceWeek();
+        assertTrue(g.human().sponsorOffers().isEmpty());
+        assertEquals(SponsorDeal.Type.EENJARIG, g.human().sponsorDeal().type);
+    }
+
+    @Test
+    public void multiYearDealLastsThreeSeasons() {
+        Game g = newGame();
+        SponsorDeal multi = null;
+        for (SponsorDeal d : g.human().sponsorOffers()) if (d.type == SponsorDeal.Type.MEERJARIG) multi = d;
+        assertTrue(g.chooseSponsor(multi).ok);
+        long amount = multi.perSeason;
+        for (int season = 0; season < 2; season++) {
+            playSeason(g);
+            g.advanceWeek();
+            assertTrue(g.human().sponsorOffers().isEmpty());
+            assertEquals(amount, g.human().sponsorPerSeason);
+        }
+        playSeason(g);
+        g.advanceWeek(); // na drie seizoenen: nieuwe aanbiedingen
+        assertEquals(3, g.human().sponsorOffers().size());
+    }
+
+    @Test
+    public void performanceDealPaysWinBonus() {
+        Game g = newGame();
+        SponsorDeal perf = null;
+        for (SponsorDeal d : g.human().sponsorOffers()) if (d.type == SponsorDeal.Type.PRESTATIE) perf = d;
+        g.chooseSponsor(perf);
+        long bonuses = 0;
+        for (int i = 0; i < Game.WEEKS_PER_SEASON; i++) {
+            g.advanceWeek();
+            Long b = g.human().ledger.week().get("Sponsorbonus");
+            if (b != null) bonuses += b;
+        }
+        int wins = g.humanDivision().sortedTable().get(g.humanDivision().positionOf(g.human()) - 1).won;
+        assertTrue(bonuses >= wins * perf.winBonus);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

@@ -47,6 +47,14 @@ public class HomeScreen extends Screen {
             return;
         }
 
+        // Openstaande beslissingen
+        if (!me.sponsorOffers().isEmpty()) {
+            LinearLayout todo = Ui.card(c, "Actie nodig");
+            todo.addView(Ui.body(c, "Er liggen drie sponsoraanbiedingen klaar. Kies er een voordat het seizoen begint."));
+            todo.addView(Ui.button(c, "Sponsor kiezen", v -> act.show(new FinanceScreen(act))));
+            root.addView(todo);
+        }
+
         // Volgende wedstrijd
         LinearLayout next = Ui.card(c, g.isSeasonOver() ? "Seizoen afgelopen" : "Week " + (g.week() + 1));
         if (g.isSeasonOver()) {
