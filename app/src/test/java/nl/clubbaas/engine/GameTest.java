@@ -311,6 +311,44 @@ public class GameTest {
         assertTrue(bonuses >= wins * perf.winBonus);
     }
 
+    // ---- Kaarten ----------------------------------------------------------------------
+
+    @Test
+    public void cardRatesAreRealistic() {
+        Game g = newGame();
+        Club a = g.division(3).clubs.get(0);
+        Club b = g.division(3).clubs.get(1);
+        java.util.Random rng = new java.util.Random(3);
+        int yellows = 0, reds = 0, matches = 2000;
+        for (int i = 0; i < matches; i++) {
+            Fixture f = new Fixture(a, b, false, 1);
+            MatchEngine.play(f, rng, false);
+            for (MatchEvent e : f.events()) {
+                if (e.type == MatchEvent.Type.YELLOW) yellows++;
+                if (e.type == MatchEvent.Type.RED || e.type == MatchEvent.Type.SECOND_YELLOW) reds++;
+            }
+            for (Player p : a.squad) p.injuryWeeks = 0;
+            for (Player p : b.squad) p.injuryWeeks = 0;
+        }
+        double y = yellows / (double) matches, r = reds / (double) matches;
+        assertTrue("geel per wedstrijd " + y, y > 1.0 && y < 2.5);
+        assertTrue("rood per wedstrijd " + r, r > 0.05 && r < 0.4);
+    }
+
+    @Test
+    public void suspendedPlayerSitsOutOneMatch() {
+        Game g = newGame();
+        Club me = g.human();
+        Player star = MatchEngine.rate(me).eleven().get(0);
+        star.suspension = 1;
+        assertFalse(MatchEngine.rate(me).eleven().contains(star));
+        Club opp = g.humanDivision().clubs.get(0) == me ? g.humanDivision().clubs.get(1) : g.humanDivision().clubs.get(0);
+        int apps = star.appearances;
+        MatchEngine.play(new Fixture(me, opp, false, 1), new java.util.Random(1), false);
+        assertEquals(apps, star.appearances);
+        assertEquals(0, star.suspension);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

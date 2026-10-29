@@ -88,7 +88,11 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 3. **Verwachte doelpunten**: thuis 1,30 × e^(0,045 × (aanval thuis + 3 − verdediging uit)),
    uit 1,10 × e^(0,045 × (aanval uit − verdediging thuis − 3)). Daarna × de speelwijze:
    verdedigend 0,85 voor / 0,80 tegen, aanvallend 1,15 voor / 1,20 tegen.
-4. **Uitslag** via een Poisson-verdeling. Gemiddeld 2,5 goals per wedstrijd, 50% thuiswinst,
+4. **Kaarten**: elke basisspeler kan geel (7%) of direct rood (0,6%) krijgen, verdedigers
+   vaker dan aanvallers. Een rode kaart kost tot 30% van de eigen kansen en geeft de
+   tegenstander tot 30% meer, afhankelijk van de minuut. Direct rood = 2 wedstrijden schorsing,
+   twee keer geel = 1, elke 5e gele kaart in een seizoen = 1.
+5. **Uitslag** via een Poisson-verdeling. Gemiddeld 2,5 goals per wedstrijd, 50% thuiswinst,
    25% gelijkspel.
 
 Vuistregel: als underdog levert verdedigend spelen gemiddeld zo'n 0,08 punt per wedstrijd op,

@@ -28,7 +28,8 @@ final class PlayerRow {
 
         LinearLayout mid = new LinearLayout(c);
         mid.setOrientation(LinearLayout.VERTICAL);
-        String name = p.name + (p.isInjured() ? "  🩹 " + p.injuryWeeks + "w" : "");
+        String name = p.name + (p.isInjured() ? "  🩹 " + p.injuryWeeks + "w" : "")
+                + (p.isSuspended() ? "  🟥 geschorst" + (p.suspension > 1 ? " (" + p.suspension + ")" : "") : "");
         mid.addView(Ui.text(c, name, 15, Ui.TEXT, true));
         mid.addView(Ui.muted(c, detail));
         row.addView(mid, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));

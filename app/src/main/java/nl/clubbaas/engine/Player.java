@@ -17,6 +17,8 @@ public class Player implements Serializable {
     public int injuryWeeks;
     public int goals;           // dit seizoen
     public int appearances;     // dit seizoen
+    public int yellowCards;     // dit seizoen
+    public int suspension;      // aantal wedstrijden geschorst
 
     // Transfermarkt
     public long askingPrice;    // alleen voor spelers op de markt (0 = transfervrij)
@@ -94,6 +96,15 @@ public class Player implements Serializable {
 
     public boolean isInjured() {
         return injuryWeeks > 0;
+    }
+
+    public boolean isSuspended() {
+        return suspension > 0;
+    }
+
+    /** Kan hij opgesteld worden? */
+    public boolean isAvailable() {
+        return !isInjured() && !isSuspended();
     }
 
     public boolean isFreeAgent() {

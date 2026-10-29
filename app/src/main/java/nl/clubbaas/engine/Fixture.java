@@ -20,6 +20,13 @@ public class Fixture implements Serializable {
     public String homeSetup;    // bijv. "4-3-3, aanvallend"
     public String awaySetup;
     public boolean favoriteForced; // de voorkeursspeler van de voorzitter speelde op diens verzoek
+    private List<MatchEvent> events; // null in oude savegames
+
+    /** Tijdlijn van de wedstrijd, op volgorde van minuut. */
+    public List<MatchEvent> events() {
+        if (events == null) events = new ArrayList<>();
+        return events;
+    }
     public final List<String> homeScorers = new ArrayList<>();
     public final List<String> awayScorers = new ArrayList<>();
 

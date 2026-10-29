@@ -159,6 +159,7 @@ public class Game implements Serializable {
             for (Player p : c.squad) {
                 p.goals = 0;
                 p.appearances = 0;
+                p.yellowCards = 0;
             }
         }
         human.ledger.startSeason();
@@ -280,6 +281,7 @@ public class Game implements Serializable {
                     if (f.home == human) collectGate(f);
                     updateFans(f);
                     managerReaction(f, rep);
+                    reportCards(f, rep);
                     if (f.winner() == human && human.sponsorDeal != null && human.sponsorDeal.winBonus > 0) {
                         addMoney("Sponsorbonus", human.sponsorDeal.winBonus);
                     }
@@ -297,6 +299,7 @@ public class Game implements Serializable {
                     rep.cupMatch = f;
                     rep.cupRoundName = roundName;
                     managerReaction(f, rep);
+                    reportCards(f, rep);
                     if (f.home == human) collectGate(f);
                     if (f.winner() == human) {
                         long prize = 5_000L << (cup.rounds.size() - 1);
@@ -338,6 +341,34 @@ public class Game implements Serializable {
             rep.seasonSummary = lastSummary;
         }
         return rep;
+    }
+
+    /** Meldingen over rode kaarten en schorsingen van de eigen spelers. */
+    private void reportCards(Fixture f, WeekReport rep) {
+        boolean weAreHome = f.home == human;
+        for (MatchEvent e : f.events()) {
+            if (e.home != weAreHome) continue;
+            Player p = findOwnPlayer(e.player);
+            if (p == null) continue;
+            String msg = null;
+            if (e.type == MatchEvent.Type.RED) {
+                msg = p.name + " kreeg een directe rode kaart en is " + p.suspension + " wedstrijden geschorst.";
+            } else if (e.type == MatchEvent.Type.SECOND_YELLOW) {
+                msg = p.name + " kreeg twee keer geel en is " + p.suspension + " wedstrijd(en) geschorst.";
+            } else if (e.type == MatchEvent.Type.YELLOW && p.yellowCards % MatchEngine.YELLOWS_FOR_SUSPENSION == 0
+                    && p.isSuspended()) {
+                msg = p.name + " pakte zijn " + p.yellowCards + "e gele kaart en is de volgende wedstrijd geschorst.";
+            }
+            if (msg != null) {
+                addNews(msg);
+                rep.messages.add(msg);
+            }
+        }
+    }
+
+    private Player findOwnPlayer(String name) {
+        for (Player p : human.squad) if (p.name.equals(name)) return p;
+        return null;
     }
 
     private void collectGate(Fixture f) {
@@ -975,7 +1006,7 @@ public class Game implements Serializable {
                 p.expectation += (float) ((role - p.expectation) * 0.1); // basisplaats kwijt: langzaam wennen
             }
             Integer before = appearancesBefore.get(p.id);
-            if (before != null && !p.isInjured()) {
+            if (before != null && p.isAvailable()) {
                 boolean played = p.appearances > before;
                 p.playShare = 0.8f * p.playShare + 0.2f * (played ? 1f : 0f);
             }

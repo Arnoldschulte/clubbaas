@@ -129,6 +129,17 @@ public class TacticsScreen extends Screen {
         // Basiself
         LinearLayout xi = Ui.card(c, "Basiself (" + mine.formation.label + ")");
         xi.addView(Ui.muted(c, "De manager stelt de beste fitte spelers op."));
+        StringBuilder missing = new StringBuilder();
+        for (Player p : me.squad) {
+            if (p.isAvailable()) continue;
+            if (missing.length() > 0) missing.append(", ");
+            missing.append(p.name).append(p.isSuspended() ? " (geschorst)" : " (geblesseerd)");
+        }
+        if (missing.length() > 0) {
+            TextView miss = Ui.text(c, "Ontbreken: " + missing, 13, Ui.BAD, false);
+            miss.setPadding(0, Ui.dp(c, 4), 0, 0);
+            xi.addView(miss);
+        }
         Player favorite = me.favorite();
         Position last = null;
         for (TeamRating.Slot s : mine.slots) {

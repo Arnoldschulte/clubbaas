@@ -74,7 +74,8 @@ public class SquadScreen extends Screen {
                         + (p.wantsTransfer() ? "📝 wil weg · " : "")
                         + (p == me.favorite() ? "⭐ " : "") + p.age + " jr · " + Fmt.money(p.wage) + " p/w · "
                         + contractText(p) + (eleven.contains(p) ? " · basis" : "")
-                        + (p.goals > 0 ? " · ⚽ " + p.goals : "");
+                        + (p.goals > 0 ? " · ⚽ " + p.goals : "")
+                        + (p.yellowCards % 5 >= 3 ? " · 🟨 " + p.yellowCards % 5 + "/5" : "");
                 card.addView(PlayerRow.create(c, p, detail, v -> showPlayer(p)));
             }
             if (!any) card.addView(Ui.muted(c, "Geen spelers op deze positie!"));
@@ -115,6 +116,8 @@ public class SquadScreen extends Screen {
                 + "Contract: " + (p.contractYears == 0 ? "loopt af na dit seizoen" : "nog " + p.contractYears + " seizoen(en) na dit seizoen") + "\n"
                 + "Dit seizoen: " + p.appearances + " wedstrijden, " + p.goals + " doelpunten"
                 + (p.isInjured() ? "\nGeblesseerd: nog " + p.injuryWeeks + " week/weken" : "")
+                + (p.isSuspended() ? "\nGeschorst: nog " + p.suspension + " wedstrijd(en)" : "")
+                + "\nGele kaarten dit seizoen: " + p.yellowCards + " (bij elke 5e een wedstrijd schorsing)"
                 + extra
                 + morale;
         Ui.actionDialog(c, p.name, info,

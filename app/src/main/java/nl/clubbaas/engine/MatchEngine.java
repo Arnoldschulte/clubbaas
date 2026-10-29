@@ -2,7 +2,9 @@ package nl.clubbaas.engine;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -57,12 +59,12 @@ public final class MatchEngine {
      */
     static TeamRating rate(Club club, Formation formation, boolean useFavorite) {
         List<Player> fit = new ArrayList<>();
-        for (Player p : club.squad) if (!p.isInjured()) fit.add(p);
+        for (Player p : club.squad) if (p.isAvailable()) fit.add(p);
         fit.sort(Comparator.comparingInt((Player p) -> -p.skill));
 
         // Voorkeursspeler van de voorzitter: zou de manager hem zelf ook opstellen?
         Player favorite = club.human && useFavorite ? club.favorite() : null;
-        if (favorite != null && favorite.isInjured()) favorite = null;
+        if (favorite != null && !favorite.isAvailable()) favorite = null;
         boolean forced = false;
         if (favorite != null) {
             int better = 0;
@@ -153,28 +155,52 @@ public final class MatchEngine {
 
     // ---- Wedstrijd ---------------------------------------------------------------------
 
+    // Kaarten
+    static final double YELLOW_CHANCE = 0.07;
+    static final double SECOND_YELLOW_CHANCE = 0.06;
+    static final double RED_CHANCE = 0.006;
+    static final int YELLOWS_FOR_SUSPENSION = 5;
+    /** Een rode kaart in minuut 1 kost 30% van de eigen kansen (en geeft de tegenstander 30% meer). */
+    private static final double RED_CARD_IMPACT = 0.30;
+
     static void play(Fixture f, Random rng, boolean neutralGround) {
+        // Wie nu geschorst is, zit deze wedstrijd uit
+        List<Player> servingHome = suspendedPlayers(f.home);
+        List<Player> servingAway = suspendedPlayers(f.away);
+
         TeamRating h = rate(f.home);
         TeamRating a = rate(f.away);
         Tactic th = tacticFor(f.home, h, a);
         Tactic ta = tacticFor(f.away, a, h);
         double[] lambda = expectedGoals(h, a, th, ta, neutralGround);
-
-        f.homeGoals = poisson(lambda[0], rng);
-        f.awayGoals = poisson(lambda[1], rng);
         f.homeSetup = h.formation.label + ", " + th.label.toLowerCase(Fmt.NL);
         f.awaySetup = a.formation.label + ", " + ta.label.toLowerCase(Fmt.NL);
-        f.played = true;
         f.favoriteForced = (f.home.human && h.favoriteForced) || (f.away.human && a.favoriteForced);
 
         List<Player> homeXI = h.eleven();
         List<Player> awayXI = a.eleven();
-        assignScorers(homeXI, f.homeGoals, f.homeScorers, rng);
-        assignScorers(awayXI, f.awayGoals, f.awayScorers, rng);
+
+        // Kaarten eerst: een rode kaart verandert de rest van de wedstrijd
+        Map<Player, Integer> sentOffHome = new HashMap<>();
+        Map<Player, Integer> sentOffAway = new HashMap<>();
+        dealCards(f, homeXI, true, sentOffHome, rng);
+        dealCards(f, awayXI, false, sentOffAway, rng);
+        double homeRed = redPenalty(sentOffHome);
+        double awayRed = redPenalty(sentOffAway);
+        double lambdaHome = lambda[0] * (1 - homeRed) * (1 + awayRed);
+        double lambdaAway = lambda[1] * (1 - awayRed) * (1 + homeRed);
+
+        f.homeGoals = poisson(lambdaHome, rng);
+        f.awayGoals = poisson(lambdaAway, rng);
+        f.played = true;
+
+        assignGoals(f, homeXI, sentOffHome, f.homeGoals, true, f.homeScorers, rng);
+        assignGoals(f, awayXI, sentOffAway, f.awayGoals, false, f.awayScorers, rng);
         for (Player p : homeXI) p.appearances++;
         for (Player p : awayXI) p.appearances++;
-        applyInjuries(f.home, homeXI, rng);
-        applyInjuries(f.away, awayXI, rng);
+        applyInjuries(f, f.home, homeXI, true, rng);
+        applyInjuries(f, f.away, awayXI, false, rng);
+        f.events().sort((x, y) -> x.minute - y.minute);
 
         if (f.cup && f.homeGoals == f.awayGoals) {
             // Strafschoppen: lichte voorkeur voor het sterkere team
@@ -182,44 +208,110 @@ public final class MatchEngine {
             double pHome = clamp(0.5 + diff * 0.01, 0.3, 0.7);
             f.penaltyWinner = rng.nextDouble() < pHome ? f.home : f.away;
         }
+
+        // Schorsing uitgezeten
+        for (Player p : servingHome) p.suspension--;
+        for (Player p : servingAway) p.suspension--;
     }
 
-    private static void assignScorers(List<Player> eleven, int goals, List<String> out, Random rng) {
-        if (eleven.isEmpty()) return;
-        double[] weights = new double[eleven.size()];
-        double sum = 0;
-        for (int i = 0; i < eleven.size(); i++) {
-            Player p = eleven.get(i);
-            double w;
-            switch (p.position) {
-                case AANVALLER: w = 5; break;
-                case MIDDENVELDER: w = 2; break;
-                case VERDEDIGER: w = 0.5; break;
-                default: w = 0.02;
-            }
-            weights[i] = w * (0.5 + p.skill / 100.0);
-            sum += weights[i];
+    private static List<Player> suspendedPlayers(Club c) {
+        List<Player> out = new ArrayList<>();
+        for (Player p : c.squad) if (p.isSuspended()) out.add(p);
+        return out;
+    }
+
+    /** Verdedigers pakken de meeste kaarten, keepers de minste. */
+    private static double cardWeight(Position p) {
+        switch (p) {
+            case VERDEDIGER: return 1.3;
+            case MIDDENVELDER: return 1.0;
+            case AANVALLER: return 0.7;
+            default: return 0.3;
         }
-        for (int g = 0; g < goals; g++) {
-            double r = rng.nextDouble() * sum;
-            int i = 0;
-            while (i < weights.length - 1 && r > weights[i]) {
-                r -= weights[i];
-                i++;
+    }
+
+    private static void dealCards(Fixture f, List<Player> eleven, boolean home,
+                                  Map<Player, Integer> sentOff, Random rng) {
+        for (Player p : eleven) {
+            double w = cardWeight(p.position);
+            if (rng.nextDouble() < RED_CHANCE * w) {
+                int minute = 1 + rng.nextInt(90);
+                f.events().add(new MatchEvent(minute, MatchEvent.Type.RED, home, p.name));
+                sentOff.put(p, minute);
+                p.suspension += 2;
+                continue;
             }
-            Player scorer = eleven.get(i);
+            if (rng.nextDouble() < YELLOW_CHANCE * w) {
+                int minute = 1 + rng.nextInt(88);
+                f.events().add(new MatchEvent(minute, MatchEvent.Type.YELLOW, home, p.name));
+                p.yellowCards++;
+                if (p.yellowCards % YELLOWS_FOR_SUSPENSION == 0) p.suspension += 1;
+                if (rng.nextDouble() < SECOND_YELLOW_CHANCE) {
+                    int second = minute + 1 + rng.nextInt(90 - minute);
+                    f.events().add(new MatchEvent(second, MatchEvent.Type.SECOND_YELLOW, home, p.name));
+                    sentOff.put(p, second);
+                    p.suspension += 1;
+                }
+            }
+        }
+    }
+
+    private static double redPenalty(Map<Player, Integer> sentOff) {
+        double penalty = 0;
+        for (int minute : sentOff.values()) penalty += RED_CARD_IMPACT * (90 - minute) / 90.0;
+        return Math.min(0.6, penalty);
+    }
+
+    private static double scoringWeight(Player p) {
+        double w;
+        switch (p.position) {
+            case AANVALLER: w = 5; break;
+            case MIDDENVELDER: w = 2; break;
+            case VERDEDIGER: w = 0.5; break;
+            default: w = 0.02;
+        }
+        return w * (0.5 + p.skill / 100.0);
+    }
+
+    /** Verdeelt de doelpunten over minuten en spelers die op dat moment nog op het veld staan. */
+    private static void assignGoals(Fixture f, List<Player> eleven, Map<Player, Integer> sentOff,
+                                    int goals, boolean home, List<String> out, Random rng) {
+        if (eleven.isEmpty()) return;
+        int[] minutes = new int[goals];
+        for (int g = 0; g < goals; g++) minutes[g] = 1 + rng.nextInt(90);
+        java.util.Arrays.sort(minutes);
+        for (int minute : minutes) {
+            List<Player> onPitch = new ArrayList<>();
+            for (Player p : eleven) {
+                Integer off = sentOff.get(p);
+                if (off == null || off > minute) onPitch.add(p);
+            }
+            if (onPitch.isEmpty()) onPitch = eleven;
+            double sum = 0;
+            for (Player p : onPitch) sum += scoringWeight(p);
+            double r = rng.nextDouble() * sum;
+            Player scorer = onPitch.get(onPitch.size() - 1);
+            for (Player p : onPitch) {
+                r -= scoringWeight(p);
+                if (r <= 0) {
+                    scorer = p;
+                    break;
+                }
+            }
             scorer.goals++;
             out.add(scorer.name);
+            f.events().add(new MatchEvent(minute, MatchEvent.Type.GOAL, home, scorer.name));
         }
     }
 
-    private static void applyInjuries(Club club, List<Player> eleven, Random rng) {
+    private static void applyInjuries(Fixture f, Club club, List<Player> eleven, boolean home, Random rng) {
         int physio = club.staffRating(StaffRole.FYSIO);
         double chance = INJURY_CHANCE * (1.3 - physio * 0.12);
         for (Player p : eleven) {
             if (rng.nextDouble() < chance) {
                 int weeks = 1 + rng.nextInt(6) - (physio - 1) / 2;
                 p.injuryWeeks = Math.max(1, weeks) + 1; // +1 omdat de teller vóór de volgende ronde zakt
+                f.events().add(new MatchEvent(1 + rng.nextInt(90), MatchEvent.Type.INJURY, home, p.name));
             }
         }
     }

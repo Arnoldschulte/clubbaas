@@ -186,6 +186,7 @@ public class HomeScreen extends Screen {
         if (r.leagueMatch != null) {
             sb.append("Competitie\n").append(r.leagueMatch.describe()).append("\n");
             appendScorers(sb, r.leagueMatch, me);
+            appendIncidents(sb, r.leagueMatch, me);
             appendOpponentSetup(sb, r.leagueMatch, me);
             if (r.leagueMatch.attendance > 0) {
                 sb.append("Toeschouwers: ").append(Fmt.number(r.leagueMatch.attendance)).append("\n");
@@ -199,6 +200,7 @@ public class HomeScreen extends Screen {
                 sb.append(r.cupMatch.penaltyWinner.name).append(" wint na strafschoppen\n");
             }
             appendScorers(sb, r.cupMatch, me);
+            appendIncidents(sb, r.cupMatch, me);
             appendOpponentSetup(sb, r.cupMatch, me);
             sb.append("\n");
         }
@@ -227,6 +229,16 @@ public class HomeScreen extends Screen {
     private static void appendScorers(StringBuilder sb, Fixture f, Club me) {
         List<String> ours = f.home == me ? f.homeScorers : f.awayScorers;
         if (!ours.isEmpty()) sb.append("Onze doelpunten: ").append(scorers(ours)).append("\n");
+    }
+
+    /** Kaarten en blessures van de eigen spelers, met minuut. */
+    private static void appendIncidents(StringBuilder sb, Fixture f, Club me) {
+        boolean weAreHome = f.home == me;
+        for (nl.clubbaas.engine.MatchEvent e : f.events()) {
+            if (e.home != weAreHome || e.type == nl.clubbaas.engine.MatchEvent.Type.GOAL
+                    || e.type == nl.clubbaas.engine.MatchEvent.Type.CHANCE) continue;
+            sb.append(e.icon()).append(" ").append(e.minute).append("' ").append(e.player).append("\n");
+        }
     }
 
     private static void appendOpponentSetup(StringBuilder sb, Fixture f, Club me) {
