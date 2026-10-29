@@ -424,6 +424,66 @@ public class GameTest {
         assertTrue(ownHasChances);
     }
 
+    // ---- Uitlenen ---------------------------------------------------------------------
+
+    /** Een jong talent dat bij de eigen club op de bank zit. */
+    private static Player benchTalent(Game g) {
+        Club me = g.human();
+        java.util.List<Player> xi = MatchEngine.rate(me).eleven();
+        for (Player p : me.squad) {
+            if (!xi.contains(p) && p.position != Position.DOELMAN) {
+                p.age = 19;
+                return p;
+            }
+        }
+        throw new AssertionError("geen bankspeler gevonden");
+    }
+
+    @Test
+    public void loanedPlayerPlaysElsewhereAndReturnsAtSeasonEnd() {
+        Game g = newGame();
+        Club me = g.human();
+        Player talent = benchTalent(g);
+        LoanOffer offer = g.loanOffer(talent);
+        assertNotNull(offer);
+        assertTrue(g.loanPlayer(talent).ok);
+        assertFalse(me.squad.contains(talent));
+        assertTrue(offer.club.squad.contains(talent));
+        assertTrue(g.isOnLoan(talent));
+
+        playSeason(g);
+        Loan loan = g.loans().get(0);
+        assertTrue("speelde " + loan.appearancesOnLoan(), loan.appearancesOnLoan() > 0 || !offer.wouldStart);
+        g.advanceWeek(); // nieuw seizoen
+        assertTrue(me.squad.contains(talent));
+        assertFalse(offer.club.squad.contains(talent));
+        assertTrue(g.loans().isEmpty());
+    }
+
+    @Test
+    public void ownWageShareIsCharged() {
+        Game g = newGame();
+        Player talent = benchTalent(g);
+        talent.wage = 1000;
+        assertTrue(g.loanPlayer(talent).ok);
+        Loan loan = g.loans().get(0);
+        g.advanceWeek();
+        Long charged = g.human().ledger.week().get("Salaris huurlingen (eigen deel)");
+        if (loan.wageSharePct < 100) assertEquals(-loan.ownWageShare(), (long) charged);
+    }
+
+    @Test
+    public void loanLimitsAreEnforced() {
+        Game g = newGame();
+        Club me = g.human();
+        int loaned = 0;
+        for (Player p : new java.util.ArrayList<>(me.squad)) {
+            if (g.loanPlayer(p).ok) loaned++;
+        }
+        assertTrue(loaned <= Game.MAX_LOANS);
+        assertTrue(me.squad.size() >= Game.MIN_SQUAD);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

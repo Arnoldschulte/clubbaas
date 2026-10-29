@@ -68,6 +68,7 @@ public class Game implements Serializable {
     private boolean gameOver;
     private String gameOverReason;
     private boolean liveDisabled; // instelling: live verslag uit (standaard aan)
+    private List<Loan> loans;     // uitgeleende spelers (null in oude savegames)
     private int nextPlayerId = 1;
     private int nextClubId = 1;
 
@@ -403,6 +404,9 @@ public class Game implements Serializable {
     private void weeklyFinances() {
         addMoney("Spelerssalarissen", -human.weeklyPlayerWages());
         if (!human.staff.isEmpty()) addMoney("Stafsalarissen", -human.weeklyStaffWages());
+        long loanWages = 0;
+        for (Loan l : loans()) loanWages += l.ownWageShare();
+        if (loanWages > 0) addMoney("Salaris huurlingen (eigen deel)", -loanWages);
         addMoney("Sponsor", human.sponsorPerSeason / WEEKS_PER_SEASON);
         long tv = TV_WEEKLY[human.level - 1];
         if (tv > 0) addMoney("Tv-gelden", tv);
@@ -490,6 +494,9 @@ public class Game implements Serializable {
     }
 
     private void startNewSeason() {
+        // 0. Huurlingen terug (vóór de ontwikkeling, zodat hun speeltijd meetelt met jouw faciliteiten)
+        returnLoans();
+
         // 1. Promotie en degradatie (eerst bepalen, dan pas verplaatsen)
         List<List<Club>> up = new ArrayList<>();
         List<List<Club>> down = new ArrayList<>();
@@ -770,7 +777,14 @@ public class Game implements Serializable {
         p.contractYears = 2 + rng.nextInt(2);
         p.wage = Player.wageFor(p.skill, p.age);
         buyer.squad.add(p);
-        if (buyer.squad.size() > 22) buyer.squad.remove(buyer.worstPlayer());
+        if (buyer.squad.size() > 22) {
+            Player worst = null;
+            for (Player q : buyer.squad) {
+                if (isOnLoan(q)) continue; // nooit een huurling van de eigen club wegdoen
+                if (worst == null || q.skill < worst.skill) worst = q;
+            }
+            if (worst != null) buyer.squad.remove(worst);
+        }
         addMoney("Transfers (verkoop)", offer);
         addNews(p.name + " verkocht aan " + buyer.name + " voor " + Fmt.money(offer) + ".");
         return ActionResult.ok(p.name + " vertrekt naar " + buyer.name + ".");
@@ -813,6 +827,98 @@ public class Game implements Serializable {
         human.squad.remove(p);
         addNews("Contract van " + p.name + " ontbonden.");
         return ActionResult.ok(p.name + " is vertrokken.");
+    }
+
+    // ---- Uitlenen ---------------------------------------------------------------------
+
+    public static final int MAX_LOANS = 4;
+    /** Na deze week kan er niet meer worden uitgeleend. */
+    public static final int LOAN_DEADLINE_WEEK = WEEKS_PER_SEASON - 4;
+
+    public List<Loan> loans() {
+        if (loans == null) loans = new ArrayList<>();
+        return loans;
+    }
+
+    public boolean isOnLoan(Player p) {
+        for (Loan l : loans()) if (l.player == p) return true;
+        return false;
+    }
+
+    private Club clubById(int id) {
+        for (Club c : allClubs()) if (c.id == id) return c;
+        return null;
+    }
+
+    /** Zou deze speler in de basis staan bij die club? Laat de club echt een opstelling maken. */
+    private static boolean wouldStartAt(Player p, Club c) {
+        boolean alreadyThere = c.squad.contains(p);
+        if (!alreadyThere) c.squad.add(p);
+        boolean starts = MatchEngine.rate(c, c.formation(), false, false).eleven().contains(p);
+        if (!alreadyThere) c.squad.remove(p);
+        return starts;
+    }
+
+    /**
+     * Een club uit dezelfde of een lagere divisie die de speler wil huren. Bij voorkeur een club
+     * waar hij basisspeler zou zijn. Per speler één aanbod per week. Null = geen belangstelling.
+     */
+    public LoanOffer loanOffer(Player p) {
+        int key = seasonYear * 100 + week;
+        if (p.loanOfferWeekKey != key) {
+            p.loanOfferWeekKey = key;
+            List<Club> starters = new ArrayList<>();
+            List<Club> others = new ArrayList<>();
+            for (int lvl = human.level; lvl <= Math.min(DIVISIONS, human.level + 2); lvl++) {
+                for (Club c : division(lvl).clubs) {
+                    if (c == human) continue;
+                    if (wouldStartAt(p, c)) starters.add(c);
+                    else others.add(c);
+                }
+            }
+            List<Club> pool = starters.isEmpty() ? others : starters;
+            if (pool.isEmpty()) {
+                p.loanOfferClubId = 0;
+            } else {
+                Club c = pool.get(rng.nextInt(pool.size()));
+                p.loanOfferClubId = c.id;
+                p.loanOfferPct = (starters.isEmpty() ? 30 : 50) + rng.nextInt(51);
+            }
+        }
+        Club c = p.loanOfferClubId == 0 ? null : clubById(p.loanOfferClubId);
+        if (c == null) return null;
+        return new LoanOffer(c, Math.min(100, p.loanOfferPct), wouldStartAt(p, c));
+    }
+
+    public ActionResult loanPlayer(Player p) {
+        if (!human.squad.contains(p)) return ActionResult.fail("Speler zit niet in je selectie.");
+        if (seasonOver || week > LOAN_DEADLINE_WEEK) return ActionResult.fail("De uitleenperiode is voorbij voor dit seizoen.");
+        if (loans().size() >= MAX_LOANS) return ActionResult.fail("Je kunt maximaal " + MAX_LOANS + " spelers uitlenen.");
+        if (human.squad.size() <= MIN_SQUAD) return ActionResult.fail("Je hebt minimaal " + MIN_SQUAD + " spelers nodig.");
+        LoanOffer offer = loanOffer(p);
+        if (offer == null) return ActionResult.fail("Geen enkele club wil " + p.name + " huren.");
+        if (human.favorite() == p) human.favoriteId = 0;
+        human.squad.remove(p);
+        offer.club.squad.add(p);
+        loans().add(new Loan(p, offer.club, offer.wageSharePct));
+        addNews(p.name + " wordt tot het eind van het seizoen verhuurd aan " + offer.club.name
+                + " (zij betalen " + offer.wageSharePct + "% van zijn salaris).");
+        return ActionResult.ok(p.name + " vertrekt op huurbasis naar " + offer.club.name + ".");
+    }
+
+    /** Aan het eind van het seizoen keren alle huurlingen terug. */
+    private void returnLoans() {
+        for (Loan l : loans()) {
+            l.club.squad.remove(l.player);
+            human.squad.add(l.player);
+            l.player.moraleInit = false; // rol bij de eigen club opnieuw bepalen
+            if (l.appearancesOnLoan() >= PLAYING_TIME_BONUS_APPS) {
+                l.player.moraleDelta = Math.min(40, l.player.moraleDelta + 5);
+            }
+            addNews(l.player.name + " keert terug van " + l.club.name + ": " + l.appearancesOnLoan()
+                    + " wedstrijden, " + l.goalsOnLoan() + " doelpunten.");
+        }
+        loans().clear();
     }
 
     // ---- Invloed van de voorzitter ----------------------------------------------------

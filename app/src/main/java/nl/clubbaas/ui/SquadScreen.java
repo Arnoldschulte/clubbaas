@@ -11,6 +11,8 @@ import nl.clubbaas.engine.ActionResult;
 import nl.clubbaas.engine.Club;
 import nl.clubbaas.engine.Fmt;
 import nl.clubbaas.engine.Game;
+import nl.clubbaas.engine.Loan;
+import nl.clubbaas.engine.LoanOffer;
 import nl.clubbaas.engine.MatchEngine;
 import nl.clubbaas.engine.MoraleBreakdown;
 import nl.clubbaas.engine.Player;
@@ -81,6 +83,23 @@ public class SquadScreen extends Screen {
             if (!any) card.addView(Ui.muted(c, "Geen spelers op deze positie!"));
             root.addView(card);
         }
+
+        List<Loan> loans = game().loans();
+        if (!loans.isEmpty()) {
+            LinearLayout loanCard = Ui.card(c, "Uitgeleend (" + loans.size() + "/" + Game.MAX_LOANS + ")");
+            boolean first = true;
+            for (Loan l : loans) {
+                if (!first) loanCard.addView(Ui.divider(c));
+                first = false;
+                String detail = l.club.name + " · " + l.appearancesOnLoan() + " wedstr. · ⚽ " + l.goalsOnLoan()
+                        + " · jij betaalt " + Fmt.money(l.ownWageShare()) + " p/w";
+                loanCard.addView(PlayerRow.create(c, l.player, detail, v ->
+                        Ui.info(c, l.player.name, "Verhuurd aan " + l.club.name + " tot het eind van het seizoen.\n\n"
+                                + "Daar gespeeld: " + l.appearancesOnLoan() + " wedstrijden, "
+                                + l.goalsOnLoan() + " doelpunten.")));
+            }
+            root.addView(loanCard);
+        }
     }
 
     static String contractText(Player p) {
@@ -123,9 +142,30 @@ public class SquadScreen extends Screen {
                 + morale;
         Ui.actionDialog(c, p.name, info,
                 new String[]{isFavorite ? "Niet meer voortrekken" : "⭐ Vraag de manager hem te laten starten",
-                        "Verkopen", "Contract verlengen", "Contract ontbinden"},
-                new int[]{Ui.STYLE_PRIMARY, Ui.STYLE_SECONDARY, Ui.STYLE_SECONDARY, Ui.STYLE_DANGER},
-                new Runnable[]{() -> toggleFavorite(p, isFavorite), () -> sell(p), () -> renew(p), () -> release(p)});
+                        "Verkopen", "Uitlenen", "Contract verlengen", "Contract ontbinden"},
+                new int[]{Ui.STYLE_PRIMARY, Ui.STYLE_SECONDARY, Ui.STYLE_SECONDARY, Ui.STYLE_SECONDARY, Ui.STYLE_DANGER},
+                new Runnable[]{() -> toggleFavorite(p, isFavorite), () -> sell(p), () -> loan(p),
+                        () -> renew(p), () -> release(p)});
+    }
+
+    private void loan(Player p) {
+        Game g = game();
+        LoanOffer offer = g.loanOffer(p);
+        if (offer == null) {
+            Ui.info(ctx(), "Uitlenen", "Geen enkele club wil " + p.name + " deze week huren.");
+            return;
+        }
+        long ownShare = Math.round(p.wage * (100 - offer.wageSharePct) / 100.0);
+        String msg = offer.club.name + " (" + g.division(offer.club.level).name + ") wil " + p.name
+                + " huren tot het eind van het seizoen.\n\n"
+                + (offer.wouldStart ? "Hij zou daar basisspeler zijn." : "Hij zou daar vooral wisselspeler zijn.") + "\n"
+                + "Zij betalen " + offer.wageSharePct + "% van zijn salaris; jij nog " + Fmt.money(ownShare) + " per week.\n\n"
+                + "Speelt een talent (t/m 23) daar " + Game.PLAYING_TIME_BONUS_APPS
+                + "+ wedstrijden, dan ontwikkelt hij zich sneller. Terughalen voor het eind van het seizoen kan niet.";
+        Ui.confirm(ctx(), "Uitlenen", msg, "Uitlenen", () -> {
+            Ui.show(ctx(), g.loanPlayer(p));
+            refresh();
+        });
     }
 
     private void toggleFavorite(Player p, boolean isFavorite) {

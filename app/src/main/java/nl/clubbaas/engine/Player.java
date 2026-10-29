@@ -33,6 +33,11 @@ public class Player implements Serializable {
     boolean moraleInit;
     boolean transferRequested;
 
+    // Huuraanbod van deze week
+    int loanOfferWeekKey = -1;
+    int loanOfferClubId;
+    int loanOfferPct;
+
     // Verkoopbod dat deze week is gedaan (zodat je niet eindeloos opnieuw kunt vragen)
     long saleOffer;
     int saleOfferWeekKey = -1;

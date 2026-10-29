@@ -67,6 +67,9 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
   (verlengt niet, biedingen −10%). Tevreden spelers verlengen goedkoper, ontevreden duurder.
 - **Stadion uitbreiden** kost tijd: 3 weken plus 1 week per 1.000 plaatsen. Tijdens de bouw
   is 10% van het stadion afgesloten.
+- **Uitlenen**: verhuur tot 4 spelers tot het eind van het seizoen (tot week 18) aan een club
+  uit dezelfde of een lagere divisie. Je ziet vooraf of hij daar basisspeler wordt en welk deel
+  van zijn salaris de huurder betaalt. Speeltijd daar telt mee voor de ontwikkelingsbonus.
 - **Sponsor**: zonder lopend contract kies je elk seizoen uit drie aanbiedingen: meerjarig
   (95%, vast voor 3 seizoenen), eenjarig (100%) of prestatie (60% + bonus per overwinning en
   bij promotie). Kies je niet, dan tekent het bestuur het eenjarige aanbod.
