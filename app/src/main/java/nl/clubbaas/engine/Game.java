@@ -86,6 +86,7 @@ public class Game implements Serializable {
                 Club c = new Club(nextClubId++, names.clubName(rng),
                         PALETTE[rng.nextInt(PALETTE.length)], level, false);
                 fillAiSquad(c);
+                pickAiFormation(c);
                 d.clubs.add(c);
             }
             divisions.add(d);
@@ -450,7 +451,11 @@ public class Game implements Serializable {
         for (Club c : allClubs()) agePlayers(c);
 
         // 3. AI-clubs op sterkte houden
-        for (Club c : allClubs()) if (!c.human) maintainAiSquad(c);
+        for (Club c : allClubs()) {
+            if (c.human) continue;
+            maintainAiSquad(c);
+            pickAiFormation(c);
+        }
 
         // 4. Eigen club: jeugd, sponsor, fans
         youthIntake();
@@ -685,6 +690,52 @@ public class Game implements Serializable {
         human.squad.remove(p);
         addNews("Contract van " + p.name + " ontbonden.");
         return ActionResult.ok(p.name + " is vertrokken.");
+    }
+
+    // ---- Tactiek ----------------------------------------------------------------------
+
+    public void setFormation(Formation f) {
+        human.formation = f;
+    }
+
+    public void setTactic(Tactic t) {
+        human.tactic = t;
+    }
+
+    /** AI-clubs kiezen elk seizoen de formatie die het best bij hun selectie past. */
+    private void pickAiFormation(Club c) {
+        Formation best = Formation.F442;
+        double bestScore = -1;
+        for (Formation f : Formation.values()) {
+            double score = MatchEngine.rate(c, f).overall() + rng.nextDouble() * 0.5;
+            if (score > bestScore) {
+                bestScore = score;
+                best = f;
+            }
+        }
+        c.formation = best;
+    }
+
+    /**
+     * Verwachte doelpunten in de volgende competitiewedstrijd, vanuit de eigen club gezien:
+     * {voor, tegen}. Null als er geen wedstrijd meer is.
+     */
+    public double[] expectedGoalsNextMatch() {
+        Fixture f = nextLeagueFixture();
+        if (f == null) return null;
+        TeamRating h = MatchEngine.rate(f.home);
+        TeamRating a = MatchEngine.rate(f.away);
+        double[] e = MatchEngine.expectedGoals(h, a,
+                MatchEngine.tacticFor(f.home, h, a), MatchEngine.tacticFor(f.away, a, h), false);
+        return f.home == human ? e : new double[]{e[1], e[0]};
+    }
+
+    /** Welke speelwijze de volgende tegenstander waarschijnlijk kiest. */
+    public Tactic expectedOpponentTactic() {
+        Fixture f = nextLeagueFixture();
+        if (f == null) return Tactic.NORMAAL;
+        Club opp = f.opponentOf(human);
+        return MatchEngine.tacticFor(opp, MatchEngine.rate(opp), MatchEngine.rate(human));
     }
 
     // ---- Staf -------------------------------------------------------------------------

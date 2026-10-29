@@ -63,6 +63,7 @@ public class GameTest {
     public void buyingAPlayerCostsMoney() {
         Game g = newGame();
         g.human().money = 10_000_000;
+        g.setFormation(Formation.F433);
         Player target = g.market().get(0);
         long cost = g.signingCost(target);
         long before = g.human().money;
@@ -70,6 +71,42 @@ public class GameTest {
         assertEquals(before - cost, g.human().money);
         assertTrue(g.human().squad.contains(target));
         assertFalse(g.market().contains(target));
+    }
+
+    @Test
+    public void defensiveFormationTradesAttackForDefense() {
+        Club me = newGame().human();
+        TeamRating defensive = MatchEngine.rate(me, Formation.F532);
+        TeamRating attacking = MatchEngine.rate(me, Formation.F433);
+        assertTrue(defensive.defense > attacking.defense);
+        assertTrue(attacking.attack > defensive.attack);
+        assertEquals(11, MatchEngine.rate(me, Formation.F451).slots.size());
+    }
+
+    @Test
+    public void attackingTacticLeadsToMoreGoalsThanDefensive() {
+        Game g = newGame();
+        Club me = g.human();
+        Club opponent = g.humanDivision().clubs.get(0) == me
+                ? g.humanDivision().clubs.get(1) : g.humanDivision().clubs.get(0);
+        java.util.Random rng = new java.util.Random(7);
+        int attackingGoals = 0, defensiveGoals = 0;
+        for (int i = 0; i < 1500; i++) {
+            g.setTactic(Tactic.AANVALLEND);
+            attackingGoals += playNeutral(me, opponent, rng);
+            g.setTactic(Tactic.VERDEDIGEND);
+            defensiveGoals += playNeutral(me, opponent, rng);
+        }
+        assertTrue("aanvallend " + attackingGoals + " vs verdedigend " + defensiveGoals,
+                attackingGoals > defensiveGoals * 1.2);
+    }
+
+    private static int playNeutral(Club a, Club b, java.util.Random rng) {
+        Fixture f = new Fixture(a, b, false, 1);
+        MatchEngine.play(f, rng, true);
+        for (Player p : a.squad) p.injuryWeeks = 0;
+        for (Player p : b.squad) p.injuryWeeks = 0;
+        return f.homeGoals + f.awayGoals;
     }
 
     @Test

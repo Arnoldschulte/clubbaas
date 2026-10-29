@@ -6,74 +6,138 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Simuleert wedstrijden. De sterkte van een team is de gemiddelde vaardigheid van de
- * beste elf fitte spelers in een 1-4-4-2, plus een bonus voor de manager en thuisvoordeel.
- * Doelpunten worden getrokken uit een Poisson-verdeling.
+ * Simuleert wedstrijden.
+ *
+ * 1. Opstelling: per formatie de beste fitte spelers op hun eigen positie; lege plekken worden
+ *    gevuld met de beste overgebleven speler, die dan voor 70% telt.
+ * 2. Aanval en verdediging zijn gewogen gemiddelden van de vaardigheid, afhankelijk van de rol
+ *    (zie WEIGHTS): keeper en verdedigers bepalen vooral de verdediging, spitsen vooral de aanval.
+ *    Een verdedigende formatie (bijv. 5-3-2) schuift daarna een paar punten van aanval naar
+ *    verdediging, een aanvallende (4-3-3) andersom.
+ * 3. Verwachte doelpunten = basis × e^(K × (eigen aanval − verdediging tegenstander)),
+ *    vermenigvuldigd met de speelwijze van beide teams. Het echte aantal komt uit een Poisson-verdeling.
  */
 public final class MatchEngine {
-    private static final int[] FORMATION = {1, 4, 4, 2}; // K, V, M, A
     private static final double HOME_ADVANTAGE = 3.0;
     private static final double INJURY_CHANCE = 0.012;
+    private static final double K = 0.045;
+    private static final double OUT_OF_POSITION = 0.7;
+    private static final int EMERGENCY_SKILL = 10;
+
+    /** Bijdrage per rol: {verdediging, aanval}. Volgorde = Position: K, V, M, A. */
+    private static final double[][] WEIGHTS = {
+            {1.00, 0.00},
+            {0.90, 0.15},
+            {0.35, 0.50},
+            {0.05, 1.00}};
+
+    /** Verschuiving per stap van de formatie weg van 4-4-2 (verdedigender of aanvallender). */
+    private static final double SHAPE_SHIFT = 1.5;
 
     private MatchEngine() {}
 
-    /** Kiest de beste elf. Spelers buiten hun positie tellen voor 70%. */
-    public static List<Player> selectEleven(Club club) {
+    // ---- Opstelling en sterkte ---------------------------------------------------------
+
+    public static TeamRating rate(Club club) {
+        return rate(club, club.formation());
+    }
+
+    public static TeamRating rate(Club club, Formation formation) {
         List<Player> fit = new ArrayList<>();
         for (Player p : club.squad) if (!p.isInjured()) fit.add(p);
         fit.sort(Comparator.comparingInt((Player p) -> -p.skill));
 
-        List<Player> eleven = new ArrayList<>();
-        Position[] positions = Position.values();
-        for (int i = 0; i < positions.length; i++) {
-            int needed = FORMATION[i];
+        // Eerst iedereen op zijn eigen positie
+        List<Player> used = new ArrayList<>();
+        Player[][] chosen = new Player[Position.values().length][];
+        for (Position pos : Position.values()) {
+            chosen[pos.ordinal()] = new Player[formation.count(pos)];
+            int i = 0;
             for (Player p : fit) {
-                if (needed == 0) break;
-                if (p.position == positions[i] && !eleven.contains(p)) {
-                    eleven.add(p);
-                    needed--;
+                if (i >= chosen[pos.ordinal()].length) break;
+                if (p.position == pos) {
+                    chosen[pos.ordinal()][i++] = p;
+                    used.add(p);
                 }
             }
         }
-        // Gaten vullen met de beste overgebleven spelers
-        for (Player p : fit) {
-            if (eleven.size() >= 11) break;
-            if (!eleven.contains(p)) eleven.add(p);
-        }
-        return eleven;
-    }
-
-    public static double strength(Club club) {
-        List<Player> eleven = selectEleven(club);
-        int[] slots = FORMATION.clone();
-        double total = 0;
-        for (Player p : eleven) {
-            int idx = p.position.ordinal();
-            if (slots[idx] > 0) {
-                slots[idx]--;
-                total += p.skill;
-            } else {
-                total += p.skill * 0.7; // speelt uit positie
+        // Daarna gaten vullen met de beste overgebleven spelers
+        List<TeamRating.Slot> slots = new ArrayList<>();
+        double def = 0, att = 0, defWeight = 0, attWeight = 0;
+        for (Position pos : Position.values()) {
+            for (int i = 0; i < chosen[pos.ordinal()].length; i++) {
+                Player p = chosen[pos.ordinal()][i];
+                if (p == null) {
+                    for (Player candidate : fit) {
+                        if (!used.contains(candidate)) {
+                            p = candidate;
+                            used.add(candidate);
+                            break;
+                        }
+                    }
+                }
+                double eff = p == null ? EMERGENCY_SKILL
+                        : p.position == pos ? p.skill : p.skill * OUT_OF_POSITION;
+                def += eff * WEIGHTS[pos.ordinal()][0];
+                att += eff * WEIGHTS[pos.ordinal()][1];
+                defWeight += WEIGHTS[pos.ordinal()][0];
+                attWeight += WEIGHTS[pos.ordinal()][1];
+                slots.add(new TeamRating.Slot(pos, p));
             }
         }
-        total += (11 - eleven.size()) * 10; // noodspelers als er te weinig fitte spelers zijn
-        double managerBonus = (club.staffRating(StaffRole.MANAGER) - 3) * 1.5;
-        return total / 11.0 + managerBonus;
+        // Gewogen gemiddelden: bij gelijke spelers zijn aanval en verdediging gelijk aan hun vaardigheid,
+        // in elke formatie. De formatie verschuift daarna een klein, gelijk bedrag tussen beide.
+        // 'shape' > 0 is verdedigend (meer verdedigers / minder aanvallers dan 4-4-2), < 0 aanvallend.
+        int shape = (formation.defenders - 4) - (formation.attackers - 2);
+        double manager = (club.staffRating(StaffRole.MANAGER) - 3) * 1.5;
+        double attack = att / attWeight - shape * SHAPE_SHIFT + manager;
+        double defense = def / defWeight + shape * SHAPE_SHIFT + manager;
+        return new TeamRating(formation, slots, attack, defense);
     }
 
-    static void play(Fixture f, Random rng, boolean neutralGround) {
-        double sh = strength(f.home) + (neutralGround ? 0 : HOME_ADVANTAGE);
-        double sa = strength(f.away);
-        double diff = sh - sa;
-        double lambdaHome = clamp(1.30 * Math.exp(diff * 0.045), 0.15, 5.0);
-        double lambdaAway = clamp(1.10 * Math.exp(-diff * 0.045), 0.15, 5.0);
+    /** Algemene teamsterkte (gemiddelde van aanval en verdediging). */
+    public static double strength(Club club) {
+        return rate(club).overall();
+    }
 
-        f.homeGoals = poisson(lambdaHome, rng);
-        f.awayGoals = poisson(lambdaAway, rng);
+    public static List<Player> selectEleven(Club club) {
+        return rate(club).eleven();
+    }
+
+    /** De eigen club speelt zoals ingesteld; AI-clubs passen hun speelwijze aan de tegenstander aan. */
+    static Tactic tacticFor(Club club, TeamRating own, TeamRating opponent) {
+        if (club.human) return club.tactic();
+        double diff = own.overall() - opponent.overall();
+        if (diff > 5) return Tactic.AANVALLEND;
+        if (diff < -5) return Tactic.VERDEDIGEND;
+        return Tactic.NORMAAL;
+    }
+
+    /** Verwachte doelpunten {thuis, uit}, ook bruikbaar voor een voorspelling in de UI. */
+    static double[] expectedGoals(TeamRating h, TeamRating a, Tactic th, Tactic ta, boolean neutral) {
+        double adv = neutral ? 0 : HOME_ADVANTAGE;
+        double lambdaHome = 1.30 * Math.exp(K * (h.attack + adv - a.defense)) * th.scoring * ta.conceding;
+        double lambdaAway = 1.10 * Math.exp(K * (a.attack - h.defense - adv)) * ta.scoring * th.conceding;
+        return new double[]{clamp(lambdaHome, 0.15, 5.0), clamp(lambdaAway, 0.15, 5.0)};
+    }
+
+    // ---- Wedstrijd ---------------------------------------------------------------------
+
+    static void play(Fixture f, Random rng, boolean neutralGround) {
+        TeamRating h = rate(f.home);
+        TeamRating a = rate(f.away);
+        Tactic th = tacticFor(f.home, h, a);
+        Tactic ta = tacticFor(f.away, a, h);
+        double[] lambda = expectedGoals(h, a, th, ta, neutralGround);
+
+        f.homeGoals = poisson(lambda[0], rng);
+        f.awayGoals = poisson(lambda[1], rng);
+        f.homeSetup = h.formation.label + ", " + th.label.toLowerCase(Fmt.NL);
+        f.awaySetup = a.formation.label + ", " + ta.label.toLowerCase(Fmt.NL);
         f.played = true;
 
-        List<Player> homeXI = selectEleven(f.home);
-        List<Player> awayXI = selectEleven(f.away);
+        List<Player> homeXI = h.eleven();
+        List<Player> awayXI = a.eleven();
         assignScorers(homeXI, f.homeGoals, f.homeScorers, rng);
         assignScorers(awayXI, f.awayGoals, f.awayScorers, rng);
         for (Player p : homeXI) p.appearances++;
@@ -83,6 +147,7 @@ public final class MatchEngine {
 
         if (f.cup && f.homeGoals == f.awayGoals) {
             // Strafschoppen: lichte voorkeur voor het sterkere team
+            double diff = h.overall() + (neutralGround ? 0 : HOME_ADVANTAGE) - a.overall();
             double pHome = clamp(0.5 + diff * 0.01, 0.3, 0.7);
             f.penaltyWinner = rng.nextDouble() < pHome ? f.home : f.away;
         }

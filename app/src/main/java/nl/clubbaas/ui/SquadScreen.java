@@ -37,7 +37,8 @@ public class SquadScreen extends Screen {
         summary.addView(Ui.keyValue(c, "Salarissen per week", Fmt.money(me.weeklyPlayerWages())));
         summary.addView(Ui.keyValue(c, "Teamsterkte (beste elf)", String.valueOf(Math.round(MatchEngine.strength(me)))));
         summary.addView(Ui.keyValue(c, "Waarde selectie", Fmt.money(me.totalSquadValue())));
-        summary.addView(Ui.muted(c, "Tik op een speler voor acties. De beste elf (1-4-4-2) wordt automatisch opgesteld."));
+        summary.addView(Ui.muted(c, "Tik op een speler voor acties. De beste elf wordt automatisch opgesteld in je "
+                + "formatie (" + me.formation().label + "); die kies je bij Tactiek."));
         root.addView(summary);
 
         List<Player> eleven = MatchEngine.selectEleven(me);

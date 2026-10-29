@@ -18,6 +18,10 @@ public class Club implements Serializable {
     public final boolean human;
     public final List<Player> squad = new ArrayList<>();
 
+    // Tactiek. Kan null zijn in savegames van vóór deze functie, gebruik daarom de getters.
+    Formation formation;
+    Tactic tactic;
+
     // Alleen voor de eigen club
     public Stadium stadium;
     public final EnumMap<StaffRole, Staff> staff = new EnumMap<>(StaffRole.class);
@@ -36,6 +40,14 @@ public class Club implements Serializable {
         this.color = color;
         this.level = level;
         this.human = human;
+    }
+
+    public Formation formation() {
+        return formation == null ? Formation.F442 : formation;
+    }
+
+    public Tactic tactic() {
+        return tactic == null ? Tactic.NORMAAL : tactic;
     }
 
     /** Sterren van een stafrol. AI-clubs hebben altijd gemiddelde staf (3). Geen staf = 0. */

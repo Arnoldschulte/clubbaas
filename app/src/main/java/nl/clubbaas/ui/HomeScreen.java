@@ -61,6 +61,11 @@ public class HomeScreen extends Screen {
                 next.addView(Ui.muted(c, "Nummer " + g.humanDivision().positionOf(opp) + " in de "
                         + g.humanDivision().name));
                 next.addView(strengthBar(c, me, opp));
+                TextView tactic = Ui.muted(c, "Jouw tactiek: " + me.formation().label + ", "
+                        + me.tactic().label.toLowerCase(Fmt.NL));
+                tactic.setPadding(0, Ui.dp(c, 8), 0, 0);
+                next.addView(tactic);
+                next.addView(Ui.secondaryButton(c, "Tactiek aanpassen", v -> act.show(new TacticsScreen(act))));
             }
             if (g.nextWeekHasCupMatch()) {
                 TextView cup = Ui.text(c, "🏆 Deze week ook een bekerronde (" + Cup.NAME + ")", 14, Ui.PRIMARY, true);
@@ -162,6 +167,7 @@ public class HomeScreen extends Screen {
         if (r.leagueMatch != null) {
             sb.append("Competitie\n").append(r.leagueMatch.describe()).append("\n");
             appendScorers(sb, r.leagueMatch, me);
+            appendOpponentSetup(sb, r.leagueMatch, me);
             if (r.leagueMatch.attendance > 0) {
                 sb.append("Toeschouwers: ").append(Fmt.number(r.leagueMatch.attendance)).append("\n");
             }
@@ -174,6 +180,7 @@ public class HomeScreen extends Screen {
                 sb.append(r.cupMatch.penaltyWinner.name).append(" wint na strafschoppen\n");
             }
             appendScorers(sb, r.cupMatch, me);
+            appendOpponentSetup(sb, r.cupMatch, me);
             sb.append("\n");
         }
         if (!r.messages.isEmpty()) sb.append(join(r.messages));
@@ -201,6 +208,11 @@ public class HomeScreen extends Screen {
     private static void appendScorers(StringBuilder sb, Fixture f, Club me) {
         List<String> ours = f.home == me ? f.homeScorers : f.awayScorers;
         if (!ours.isEmpty()) sb.append("Onze doelpunten: ").append(scorers(ours)).append("\n");
+    }
+
+    private static void appendOpponentSetup(StringBuilder sb, Fixture f, Club me) {
+        String setup = f.home == me ? f.awaySetup : f.homeSetup;
+        if (setup != null) sb.append("Tegenstander speelde ").append(setup).append("\n");
     }
 
     /** "Jansen (2), de Vries" */

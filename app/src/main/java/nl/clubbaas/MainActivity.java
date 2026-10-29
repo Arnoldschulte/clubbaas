@@ -29,6 +29,7 @@ import nl.clubbaas.ui.SquadScreen;
 import nl.clubbaas.ui.StadiumScreen;
 import nl.clubbaas.ui.StaffScreen;
 import nl.clubbaas.ui.TableScreen;
+import nl.clubbaas.ui.TacticsScreen;
 import nl.clubbaas.ui.TransferScreen;
 import nl.clubbaas.ui.Ui;
 
@@ -210,18 +211,19 @@ public class MainActivity extends Activity {
     }
 
     private void showMoreMenu() {
-        String[] items = {"📅  Wedstrijden", "🏆  Beker", "🏟  Stadion", "🧑‍💼  Staf",
+        String[] items = {"🎯  Tactiek", "📅  Wedstrijden", "🏆  Beker", "🏟  Stadion", "🧑‍💼  Staf",
                 "💰  Financiën", "📰  Nieuws", "🏛  Club & historie"};
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Meer")
                 .setItems(items, (d, which) -> {
                     switch (which) {
-                        case 0: show(new FixturesScreen(this)); break;
-                        case 1: show(new CupScreen(this)); break;
-                        case 2: show(new StadiumScreen(this)); break;
-                        case 3: show(new StaffScreen(this)); break;
-                        case 4: show(new FinanceScreen(this)); break;
-                        case 5: show(new NewsScreen(this)); break;
+                        case 0: show(new TacticsScreen(this)); break;
+                        case 1: show(new FixturesScreen(this)); break;
+                        case 2: show(new CupScreen(this)); break;
+                        case 3: show(new StadiumScreen(this)); break;
+                        case 4: show(new StaffScreen(this)); break;
+                        case 5: show(new FinanceScreen(this)); break;
+                        case 6: show(new NewsScreen(this)); break;
                         default: show(new ClubScreen(this));
                     }
                 })

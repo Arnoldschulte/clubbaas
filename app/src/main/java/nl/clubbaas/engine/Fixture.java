@@ -17,6 +17,8 @@ public class Fixture implements Serializable {
     public boolean played;
     public Club penaltyWinner;  // alleen bij een gelijkspel in de beker
     public int attendance;      // alleen ingevuld bij thuiswedstrijden van de eigen club
+    public String homeSetup;    // bijv. "4-3-3, aanvallend"
+    public String awaySetup;
     public final List<String> homeScorers = new ArrayList<>();
     public final List<String> awayScorers = new ArrayList<>();
 
