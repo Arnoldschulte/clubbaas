@@ -141,7 +141,11 @@ public class GameTest {
         g.setFavorite(bench);
         boolean resigned = false;
         for (int i = 0; i < 20 && !resigned; i++) {
-            bench.injuryWeeks = 0;
+            // Iedereen beschikbaar, zodat de manager de voorkeursspeler zelf nooit zou kiezen
+            for (Player p : me.squad) {
+                p.injuryWeeks = 0;
+                p.suspension = 0;
+            }
             g.advanceWeek();
             resigned = me.staff.get(StaffRole.MANAGER) == null;
         }
@@ -379,6 +383,45 @@ public class GameTest {
         assertFalse(MatchEngine.rate(me).eleven().contains(starter));
         starter.fatigue = 0;
         assertTrue(MatchEngine.rate(me).eleven().contains(starter));
+    }
+
+    // ---- Live verslag -----------------------------------------------------------------
+
+    @Test
+    public void ownMatchHasTimelineMatchingTheScore() {
+        Game g = newGame();
+        for (int w = 0; w < 6; w++) {
+            WeekReport r = g.advanceWeek();
+            Fixture f = r.leagueMatch;
+            int home = 0, away = 0, last = 0;
+            for (MatchEvent e : f.events()) {
+                assertTrue("tijdlijn op volgorde", e.minute >= last);
+                last = e.minute;
+                if (e.type == MatchEvent.Type.GOAL) {
+                    if (e.home) home++;
+                    else away++;
+                }
+                assertTrue(Commentary.line(f, e, home, away).length() > 5);
+            }
+            assertEquals(f.homeGoals, home);
+            assertEquals(f.awayGoals, away);
+        }
+    }
+
+    @Test
+    public void chancesOnlyGeneratedForOwnMatches() {
+        Game g = newGame();
+        g.advanceWeek();
+        boolean ownHasChances = false;
+        for (Division d : g.divisions()) {
+            for (Fixture f : d.round(1)) {
+                boolean chances = false;
+                for (MatchEvent e : f.events()) if (e.type == MatchEvent.Type.CHANCE) chances = true;
+                if (f.involves(g.human())) ownHasChances = chances;
+                else assertFalse(chances);
+            }
+        }
+        assertTrue(ownHasChances);
     }
 
     @Test

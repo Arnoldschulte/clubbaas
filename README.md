@@ -102,6 +102,10 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 Vuistregel: als underdog levert verdedigend spelen gemiddeld zo'n 0,08 punt per wedstrijd op,
 als favoriet helpt aanvallend spelen.
 
+**Live verslag**: elke wedstrijd heeft een tijdlijn (doelpunten, kaarten, blessures en bij je
+eigen wedstrijden ook gemiste kansen). De app speelt je wedstrijd in ongeveer tien seconden af,
+met commentaar; overslaan kan altijd. Uitzetten kan bij Club & historie.
+
 ## Balans aanpassen
 
 Alle knoppen om aan te draaien staan bovenaan `Game.java`: `FAN_BASELINE`, `FAIR_PRICE`,
@@ -114,4 +118,3 @@ Spelerswaarde en salaris staan in `Player.baseValue()` en `Player.wageFor()`.
 - Onderhandelen over transfersommen (bod / tegenbod)
 - Bouwtijd voor het stadion (uitbreiding klaar na X weken)
 - Prestaties en een highscorelijst
-- Een speelweek-animatie of live tekstverslag

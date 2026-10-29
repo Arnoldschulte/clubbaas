@@ -218,6 +218,11 @@ public final class MatchEngine {
 
         assignGoals(f, homeXI, sentOffHome, f.homeGoals, true, f.homeScorers, rng);
         assignGoals(f, awayXI, sentOffAway, f.awayGoals, false, f.awayScorers, rng);
+        if (f.home.human || f.away.human) {
+            // Gemiste kansen, alleen voor het live verslag van de eigen wedstrijden
+            addChances(f, homeXI, sentOffHome, poisson(lambdaHome * 1.3, rng), true, rng);
+            addChances(f, awayXI, sentOffAway, poisson(lambdaAway * 1.3, rng), false, rng);
+        }
         for (Player p : homeXI) addMatchLoad(p);
         for (Player p : awayXI) addMatchLoad(p);
         applyInjuries(f, f.home, homeXI, true, rng);
@@ -315,6 +320,24 @@ public final class MatchEngine {
         return w * (0.5 + p.skill / 100.0);
     }
 
+    /** Kiest een speler die op die minuut nog op het veld staat, gewogen naar scoringskans. */
+    private static Player pickAttacker(List<Player> eleven, Map<Player, Integer> sentOff, int minute, Random rng) {
+        List<Player> onPitch = new ArrayList<>();
+        for (Player p : eleven) {
+            Integer off = sentOff.get(p);
+            if (off == null || off > minute) onPitch.add(p);
+        }
+        if (onPitch.isEmpty()) onPitch = eleven;
+        double sum = 0;
+        for (Player p : onPitch) sum += scoringWeight(p);
+        double r = rng.nextDouble() * sum;
+        for (Player p : onPitch) {
+            r -= scoringWeight(p);
+            if (r <= 0) return p;
+        }
+        return onPitch.get(onPitch.size() - 1);
+    }
+
     /** Verdeelt de doelpunten over minuten en spelers die op dat moment nog op het veld staan. */
     private static void assignGoals(Fixture f, List<Player> eleven, Map<Player, Integer> sentOff,
                                     int goals, boolean home, List<String> out, Random rng) {
@@ -323,26 +346,20 @@ public final class MatchEngine {
         for (int g = 0; g < goals; g++) minutes[g] = 1 + rng.nextInt(90);
         java.util.Arrays.sort(minutes);
         for (int minute : minutes) {
-            List<Player> onPitch = new ArrayList<>();
-            for (Player p : eleven) {
-                Integer off = sentOff.get(p);
-                if (off == null || off > minute) onPitch.add(p);
-            }
-            if (onPitch.isEmpty()) onPitch = eleven;
-            double sum = 0;
-            for (Player p : onPitch) sum += scoringWeight(p);
-            double r = rng.nextDouble() * sum;
-            Player scorer = onPitch.get(onPitch.size() - 1);
-            for (Player p : onPitch) {
-                r -= scoringWeight(p);
-                if (r <= 0) {
-                    scorer = p;
-                    break;
-                }
-            }
+            Player scorer = pickAttacker(eleven, sentOff, minute, rng);
             scorer.goals++;
             out.add(scorer.name);
             f.events().add(new MatchEvent(minute, MatchEvent.Type.GOAL, home, scorer.name));
+        }
+    }
+
+    private static void addChances(Fixture f, List<Player> eleven, Map<Player, Integer> sentOff,
+                                   int chances, boolean home, Random rng) {
+        if (eleven.isEmpty()) return;
+        for (int i = 0; i < chances; i++) {
+            int minute = 1 + rng.nextInt(90);
+            Player p = pickAttacker(eleven, sentOff, minute, rng);
+            f.events().add(new MatchEvent(minute, MatchEvent.Type.CHANCE, home, p.name));
         }
     }
 

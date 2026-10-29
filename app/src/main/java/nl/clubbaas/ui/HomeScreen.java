@@ -164,6 +164,11 @@ public class HomeScreen extends Screen {
             Ui.info(ctx(), "Failliet", game().gameOverReason());
         } else if (r.newSeasonStarted) {
             Ui.info(ctx(), "Nieuw seizoen", join(r.messages));
+        } else if (game().isLiveEnabled() && r.leagueMatch != null) {
+            Club me = game().human();
+            Runnable afterLeague = r.cupMatch == null ? () -> showReport(r)
+                    : () -> LiveMatch.show(ctx(), me, r.cupMatch, Cup.NAME + " – " + r.cupRoundName, () -> showReport(r));
+            LiveMatch.show(ctx(), me, r.leagueMatch, "Live: week " + game().week(), afterLeague);
         } else {
             showReport(r);
         }

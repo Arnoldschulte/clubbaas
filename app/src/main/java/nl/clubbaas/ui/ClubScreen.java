@@ -65,6 +65,12 @@ public class ClubScreen extends Screen {
         root.addView(hist);
 
         LinearLayout danger = Ui.card(c, "Spel");
+        boolean live = game().isLiveEnabled();
+        danger.addView(Ui.keyValue(c, "Live wedstrijdverslag", live ? "Aan" : "Uit"));
+        danger.addView(Ui.secondaryButton(c, live ? "Live verslag uitzetten" : "Live verslag aanzetten", v -> {
+            game().setLiveEnabled(!live);
+            refresh();
+        }));
         danger.addView(Ui.muted(c, "Het spel wordt na elke actie automatisch opgeslagen."));
         danger.addView(Ui.dangerButton(c, "Nieuw spel beginnen", v ->
                 Ui.confirm(c, "Nieuw spel", "Je huidige spel wordt definitief verwijderd. Weet je het zeker?",

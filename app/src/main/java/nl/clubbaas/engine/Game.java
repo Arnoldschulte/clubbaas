@@ -67,6 +67,7 @@ public class Game implements Serializable {
     private double pendingFanFactor = 1.0;
     private boolean gameOver;
     private String gameOverReason;
+    private boolean liveDisabled; // instelling: live verslag uit (standaard aan)
     private int nextPlayerId = 1;
     private int nextClubId = 1;
 
@@ -187,6 +188,8 @@ public class Game implements Serializable {
     public boolean isGameOver() { return gameOver; }
     public String gameOverReason() { return gameOverReason; }
     public List<Player> market() { return market; }
+    public boolean isLiveEnabled() { return !liveDisabled; }
+    public void setLiveEnabled(boolean enabled) { liveDisabled = !enabled; }
 
     public List<Staff> candidates(StaffRole role) {
         List<Staff> list = candidates.get(role);
