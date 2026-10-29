@@ -38,6 +38,13 @@ public class Player implements Serializable {
     int loanOfferClubId;
     int loanOfferPct;
 
+    // Onderhandeling over een aankoop deze week
+    int negoWeekKey = -1;
+    long negoMin;        // verborgen minimumprijs van de verkoper
+    long negoCounter;    // laatste tegenbod (0 = nog geen)
+    int negoRounds;
+    boolean negoClosed;  // verkoper praat deze week niet meer
+
     // Verkoopbod dat deze week is gedaan (zodat je niet eindeloos opnieuw kunt vragen)
     long saleOffer;
     int saleOfferWeekKey = -1;

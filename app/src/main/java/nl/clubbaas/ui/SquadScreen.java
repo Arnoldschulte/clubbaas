@@ -198,15 +198,11 @@ public class SquadScreen extends Screen {
     }
 
     private void sell(Player p) {
-        long offer = game().saleOffer(p);
-        Ui.confirm(ctx(), "Bod op " + p.name,
-                "Een club biedt " + Fmt.money(offer) + " (marktwaarde " + Fmt.money(p.value()) + ").\n\n"
-                        + "Je krijgt deze week geen ander bod op deze speler.",
-                "Accepteren", () -> {
-                    ActionResult r = game().sellPlayer(p);
-                    Ui.show(ctx(), r);
-                    refresh();
-                });
+        if (game().human().squad.size() <= Game.MIN_SQUAD) {
+            Ui.info(ctx(), "Verkopen", "Je hebt minimaal " + Game.MIN_SQUAD + " spelers nodig.");
+            return;
+        }
+        TransferDialogs.respondToBid(ctx(), game(), game().bidFor(p), this::refresh);
     }
 
     private void renew(Player p) {

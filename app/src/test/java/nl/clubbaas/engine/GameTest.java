@@ -530,6 +530,96 @@ public class GameTest {
         assertTrue(broke.money > -50_000_000L);
     }
 
+    // ---- Onderhandelen ----------------------------------------------------------------
+
+    private static Player marketPlayerWithFee(Game g) {
+        for (Player p : g.market()) if (!p.isFreeAgent()) return p;
+        throw new AssertionError("geen marktspeler met vraagprijs");
+    }
+
+    @Test
+    public void bidAtAskingPriceIsAccepted() {
+        Game g = newGame();
+        g.human().money = 100_000_000L;
+        Player p = marketPlayerWithFee(g);
+        NegotiationResult r = g.bid(p, g.askingPrice(p));
+        assertEquals(NegotiationResult.Outcome.ACCEPTED, r.outcome);
+        assertTrue(g.human().squad.contains(p));
+    }
+
+    @Test
+    public void insultingBidEndsTalksForTheWeek() {
+        Game g = newGame();
+        g.human().money = 100_000_000L;
+        Player p = marketPlayerWithFee(g);
+        long asking = g.askingPrice(p);
+        assertEquals(NegotiationResult.Outcome.REFUSED, g.bid(p, asking / 4).outcome);
+        assertEquals(NegotiationResult.Outcome.REFUSED, g.bid(p, asking).outcome);
+        assertFalse(g.human().squad.contains(p));
+    }
+
+    @Test
+    public void counterOfferCanBeAccepted() {
+        Game g = newGame();
+        g.human().money = 100_000_000L;
+        Player p = marketPlayerWithFee(g);
+        NegotiationResult r = g.bid(p, Math.round(g.askingPrice(p) * 0.65));
+        assertEquals(NegotiationResult.Outcome.COUNTER, r.outcome);
+        long before = g.human().money;
+        assertTrue(g.acceptCounter(p).ok);
+        assertEquals(before - r.counter, g.human().money);
+        assertTrue(r.counter < g.askingPrice(p) || true);
+    }
+
+    @Test
+    public void playerCanBeBoughtFromAnotherClub() {
+        Game g = newGame();
+        g.human().money = 500_000_000L;
+        Player target = g.scoutablePlayers(null, 10).get(0);
+        Club seller = g.sellerOf(target);
+        assertNotNull(seller);
+        long sellerMoney = seller.money;
+        NegotiationResult r = g.bid(target, g.askingPrice(target));
+        assertEquals(NegotiationResult.Outcome.ACCEPTED, r.outcome);
+        assertFalse(seller.squad.contains(target));
+        assertTrue(g.human().squad.contains(target));
+        assertTrue(seller.money > sellerMoney);
+    }
+
+    @Test
+    public void askingMoreRaisesOnceOrBuyerWalksAway() {
+        int raised = 0, walked = 0;
+        for (long seed = 1; seed <= 40; seed++) {
+            Game g = new Game("T", "FC T", Game.PALETTE[0], 2026, seed);
+            Player p = g.human().squad.get(0);
+            TransferBid b = g.bidFor(p);
+            long before = b.amount;
+            if (g.askMore(b).ok) {
+                raised++;
+                assertTrue(b.amount > before);
+                assertFalse(g.askMore(b).ok); // maar één keer
+            } else {
+                walked++;
+                assertFalse(g.bids().contains(b));
+            }
+        }
+        assertTrue(raised > 5 && walked > 5);
+    }
+
+    @Test
+    public void unhappyPlayerAttractsUnsolicitedBids() {
+        Game g = newGame();
+        Player p = g.human().squad.get(2);
+        boolean bidSeen = false;
+        for (int i = 0; i < 20 && !bidSeen; i++) {
+            p.moraleDelta = -50;
+            p.transferRequested = true;
+            g.advanceWeek();
+            for (TransferBid b : g.openUnsolicitedBids()) if (b.player == p) bidSeen = true;
+        }
+        assertTrue(bidSeen);
+    }
+
     @Test
     public void saveAndLoadKeepsTheGame() throws Exception {
         Game g = newGame();

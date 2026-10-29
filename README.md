@@ -73,6 +73,11 @@ Het principe: de UI roept alleen publieke methodes van `Game` aan (bijv. `buyPla
 - **Sponsor**: zonder lopend contract kies je elk seizoen uit drie aanbiedingen: meerjarig
   (95%, vast voor 3 seizoenen), eenjarig (100%) of prestatie (60% + bonus per overwinning en
   bij promotie). Kies je niet, dan tekent het bestuur het eenjarige aanbod.
+- **Onderhandelen**: bij aankoop heeft de verkoper een verborgen minimumprijs. Genoeg geboden =
+  rond; in de buurt = tegenbod (max. 3 rondes); te laag = deze week geen gesprek meer. Je kunt
+  ook spelers van andere clubs kopen (basisspelers en hogere clubs zijn duurder). Bij verkoop
+  kun je meer vragen: de koper verhoogt eenmalig, of haakt af. AI-clubs doen soms ongevraagd
+  een bod op je toppers, vaker op spelers die weg willen.
 - **AI-clubs** hebben een eigen budget: inkomsten per divisie (iets meer dan een selectie op
   niveau kost) min salarissen. Na elk seizoen is er een transferperiode: clubs in de schulden
   verkopen hun beste spelers, rijke clubs kopen de beste spelers van clubs uit lagere divisies.
@@ -122,6 +127,5 @@ Spelerswaarde en salaris staan in `Player.baseValue()` en `Player.wageFor()`.
 ## Ideeën voor de volgende stap
 
 - Europese toernooien voor de top 3 van de Topdivisie
-- Onderhandelen over transfersommen (bod / tegenbod)
 - Bouwtijd voor het stadion (uitbreiding klaar na X weken)
 - Prestaties en een highscorelijst

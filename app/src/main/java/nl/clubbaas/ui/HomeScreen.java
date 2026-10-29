@@ -55,6 +55,18 @@ public class HomeScreen extends Screen {
             root.addView(todo);
         }
 
+        java.util.List<nl.clubbaas.engine.TransferBid> incoming = g.openUnsolicitedBids();
+        if (!incoming.isEmpty()) {
+            LinearLayout bidCard = Ui.card(c, "Biedingen op je spelers");
+            for (nl.clubbaas.engine.TransferBid b : incoming) {
+                bidCard.addView(Ui.keyValue(c, b.player.name, Fmt.money(b.amount)));
+                bidCard.addView(Ui.muted(c, b.buyerName() + (b.raised ? " (laatste bod)" : "")));
+                bidCard.addView(Ui.secondaryButton(c, "Reageren", v ->
+                        TransferDialogs.respondToBid(ctx(), g, b, this::refresh)));
+            }
+            root.addView(bidCard);
+        }
+
         // Volgende wedstrijd
         LinearLayout next = Ui.card(c, g.isSeasonOver() ? "Seizoen afgelopen" : "Week " + (g.week() + 1));
         if (g.isSeasonOver()) {

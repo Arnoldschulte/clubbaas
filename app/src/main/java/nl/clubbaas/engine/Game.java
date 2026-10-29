@@ -333,6 +333,7 @@ public class Game implements Serializable {
         progressConstruction(rep);
         weeklyFinances();
         AiEconomy.weekly(this);
+        weeklyBids(rep);
         weeklyMarketRefresh();
         if (week % 4 == 1) refreshCandidates();
 
@@ -760,36 +761,172 @@ public class Game implements Serializable {
         return p.isFreeAgent() ? p.wage * 6L : p.askingPrice;
     }
 
+    /** Koopt een speler voor de vraagprijs (of tekengeld bij een transfervrije speler). */
     public ActionResult buyPlayer(Player p) {
-        if (!market.contains(p)) return ActionResult.fail("Deze speler is niet meer beschikbaar.");
+        if (p.isFreeAgent() && market.contains(p)) return completePurchase(p, null, signingCost(p));
+        return completePurchase(p, sellerOf(p), askingPrice(p));
+    }
+
+    // ---- Onderhandelen bij aankoop ------------------------------------------------------
+
+    /** Bij welke AI-club speelt deze speler nu? Null = transfermarkt. */
+    public Club sellerOf(Player p) {
+        if (market.contains(p)) return null;
+        for (Club c : allClubs()) if (!c.human && c.squad.contains(p)) return c;
+        return null;
+    }
+
+    /** Vraagprijs: marktspelers hebben een vaste vraagprijs, clubs vragen meer voor basisspelers. */
+    public long askingPrice(Player p) {
+        if (market.contains(p)) return p.isFreeAgent() ? signingCost(p) : p.askingPrice;
+        Club seller = sellerOf(p);
+        if (seller == null) return p.value();
+        double f = MatchEngine.rate(seller, seller.formation(), false, false).eleven().contains(p) ? 1.4 : 1.15;
+        if (seller.level < human.level) f *= 1.2;
+        return Math.round(p.value() * f / 1000.0) * 1000;
+    }
+
+    /** Spelers van andere clubs die je kunt proberen te kopen (divisie hoger, gelijk of lager). */
+    public List<Player> scoutablePlayers(Position filter, int max) {
+        List<Player> out = new ArrayList<>();
+        for (int lvl = Math.max(1, human.level - 1); lvl <= Math.min(DIVISIONS, human.level + 1); lvl++) {
+            for (Club c : division(lvl).clubs) {
+                if (c.human || c.squad.size() <= 16) continue;
+                for (Player p : c.squad) {
+                    if (isOnLoan(p) || p.age > 33) continue;
+                    if (filter == null || p.position == filter) out.add(p);
+                }
+            }
+        }
+        out.sort((a, b) -> b.skill - a.skill);
+        return out.subList(0, Math.min(max, out.size()));
+    }
+
+    private void startNegotiation(Player p) {
+        int key = seasonYear * 100 + week;
+        if (p.negoWeekKey == key) return;
+        p.negoWeekKey = key;
+        p.negoMin = Math.round(askingPrice(p) * (0.75 + rng.nextDouble() * 0.2) / 500.0) * 500;
+        p.negoCounter = 0;
+        p.negoRounds = 0;
+        p.negoClosed = false;
+    }
+
+    /**
+     * Doe een bod. Genoeg = direct rond. In de buurt = tegenbod (max. 3 rondes). Te laag =
+     * de verkoper stopt deze week met praten.
+     */
+    public NegotiationResult bid(Player p, long amount) {
+        Club seller = sellerOf(p);
+        if (seller == null && !market.contains(p)) {
+            return new NegotiationResult(NegotiationResult.Outcome.REFUSED, 0, "Deze speler is niet meer beschikbaar.");
+        }
+        if (seller != null && seller.squad.size() <= 16) {
+            return new NegotiationResult(NegotiationResult.Outcome.REFUSED, 0,
+                    seller.name + " heeft te weinig spelers en verkoopt niet.");
+        }
+        startNegotiation(p);
+        if (p.negoClosed) {
+            return new NegotiationResult(NegotiationResult.Outcome.REFUSED, 0,
+                    "De verkoper wil deze week niet meer met je praten.");
+        }
+        long asking = askingPrice(p);
+        p.negoRounds++;
+        if (amount >= p.negoMin) {
+            ActionResult r = completePurchase(p, seller, amount);
+            return new NegotiationResult(r.ok ? NegotiationResult.Outcome.ACCEPTED : NegotiationResult.Outcome.REFUSED,
+                    0, r.ok ? "Bod geaccepteerd! " + r.message : r.message);
+        }
+        if (amount >= asking * 0.6 && p.negoRounds < 3) {
+            long previous = p.negoCounter == 0 ? asking : p.negoCounter;
+            long counter = Math.max(p.negoMin, Math.round((amount + previous) / 2.0 / 500.0) * 500);
+            p.negoCounter = counter;
+            return new NegotiationResult(NegotiationResult.Outcome.COUNTER, counter,
+                    "De verkoper komt met een tegenbod: " + Fmt.money(counter) + ".");
+        }
+        p.negoClosed = true;
+        return new NegotiationResult(NegotiationResult.Outcome.REFUSED, 0,
+                amount < asking * 0.6 ? "Een beledigend bod. De verkoper wil deze week niet meer praten."
+                        : "Geen akkoord. De verkoper wil deze week niet meer praten.");
+    }
+
+    /** Het laatste tegenbod accepteren. */
+    public ActionResult acceptCounter(Player p) {
+        int key = seasonYear * 100 + week;
+        if (p.negoWeekKey != key || p.negoCounter == 0 || p.negoClosed) {
+            return ActionResult.fail("Er ligt geen tegenbod meer.");
+        }
+        return completePurchase(p, sellerOf(p), p.negoCounter);
+    }
+
+    private ActionResult completePurchase(Player p, Club seller, long price) {
+        if (seller == null && !market.contains(p)) return ActionResult.fail("Deze speler is niet meer beschikbaar.");
         if (human.squad.size() >= MAX_SQUAD) return ActionResult.fail("Je selectie zit vol (max " + MAX_SQUAD + ").");
-        long cost = signingCost(p);
-        if (human.money < cost) return ActionResult.fail("Te weinig geld. Nodig: " + Fmt.money(cost));
-        addMoney(p.isFreeAgent() ? "Tekengeld" : "Transfers (aankoop)", -cost);
-        market.remove(p);
+        if (human.money < price) return ActionResult.fail("Te weinig geld. Nodig: " + Fmt.money(price));
+        boolean free = seller == null && p.isFreeAgent();
+        addMoney(free ? "Tekengeld" : "Transfers (aankoop)", -price);
+        if (seller != null) {
+            seller.squad.remove(p);
+            seller.money += price;
+            p.wage = Player.wageFor(p.skill, p.age);
+        } else {
+            market.remove(p);
+        }
         p.askingPrice = 0;
         p.contractYears = 1 + rng.nextInt(3);
         p.goals = 0;
         p.appearances = 0;
+        p.yellowCards = 0;
         p.moraleDelta = 10;       // enthousiast over zijn nieuwe club
         p.moraleInit = false;     // speeltijd begint bij de verwachting voor zijn rol
         p.transferRequested = false;
+        p.negoWeekKey = -1;
         human.squad.add(p);
-        addNews(p.name + " tekent bij " + human.name + " voor " + Fmt.money(cost) + ".");
+        addNews(p.name + " tekent bij " + human.name + (seller != null ? " (over van " + seller.name + ")" : "")
+                + " voor " + Fmt.money(price) + ".");
         return ActionResult.ok(p.name + " is jouw nieuwe aanwinst!");
     }
 
-    /** Bod van een andere club. Per speler één bod per week. */
+    // ---- Biedingen op eigen spelers -----------------------------------------------------
+
+    private List<TransferBid> bids; // null in oude savegames
+
+    public List<TransferBid> bids() {
+        if (bids == null) bids = new ArrayList<>();
+        return bids;
+    }
+
+    /** Ongevraagde biedingen die nog openstaan. */
+    public List<TransferBid> openUnsolicitedBids() {
+        List<TransferBid> out = new ArrayList<>();
+        for (TransferBid b : bids()) if (!b.solicited) out.add(b);
+        return out;
+    }
+
+    private int weekKey() {
+        return seasonYear * 100 + week;
+    }
+
+    private long offerAmount(Player p, double low, double high) {
+        double f = low + rng.nextDouble() * (high - low);
+        if (isShowcased(p)) f *= 1.10;
+        if (p.transferRequested) f *= 0.90; // iedereen weet dat hij weg wil
+        return Math.max(500, Math.round(p.value() * f / 500.0) * 500);
+    }
+
+    /** Bod als je een speler zelf aanbiedt. Per speler één bod per week. */
+    public TransferBid bidFor(Player p) {
+        for (TransferBid b : bids()) if (b.player == p && b.solicited && b.expiresWeekKey == weekKey()) return b;
+        bids().removeIf(b -> b.player == p && b.solicited);
+        long amount = offerAmount(p, 0.7, 1.15);
+        TransferBid b = new TransferBid(p, findBuyer(amount), amount, true, weekKey());
+        bids().add(b);
+        return b;
+    }
+
+    /** Kort voor bidFor(p).amount, voor de UI en bestaande code. */
     public long saleOffer(Player p) {
-        int key = seasonYear * 100 + week;
-        if (p.saleOfferWeekKey != key) {
-            double f = 0.7 + rng.nextDouble() * 0.45;
-            if (isShowcased(p)) f *= 1.10;
-            if (p.transferRequested) f *= 0.90; // iedereen weet dat hij weg wil
-            p.saleOffer = Math.max(500, Math.round(p.value() * f / 500.0) * 500);
-            p.saleOfferWeekKey = key;
-        }
-        return p.saleOffer;
+        return bidFor(p).amount;
     }
 
     /** Speelt genoeg om op te vallen bij andere clubs: +10% op verkoopbiedingen. */
@@ -798,13 +935,74 @@ public class Game implements Serializable {
     }
 
     public ActionResult sellPlayer(Player p) {
-        if (!human.squad.contains(p)) return ActionResult.fail("Speler zit niet in je selectie.");
+        return acceptBid(bidFor(p));
+    }
+
+    public ActionResult acceptBid(TransferBid b) {
+        if (!bids().contains(b)) return ActionResult.fail("Dit bod is niet meer geldig.");
+        if (!human.squad.contains(b.player)) return ActionResult.fail("Speler zit niet in je selectie.");
         if (human.squad.size() <= MIN_SQUAD) return ActionResult.fail("Je hebt minimaal " + MIN_SQUAD + " spelers nodig.");
-        long offer = saleOffer(p);
-        Club buyer = findBuyer(offer);
-        completeSale(p, buyer, offer);
+        Club buyer = b.club != null && b.club.money >= b.amount ? b.club : null;
+        completeSale(b.player, buyer, b.amount);
         String to = buyer == null ? "een buitenlandse club" : buyer.name;
-        return ActionResult.ok(p.name + " vertrekt naar " + to + ".");
+        return ActionResult.ok(b.player.name + " vertrekt naar " + to + " voor " + Fmt.money(b.amount) + ".");
+    }
+
+    /** Meer vragen: de koper verhoogt zijn bod (eenmalig) of haakt af. */
+    public ActionResult askMore(TransferBid b) {
+        if (!bids().contains(b)) return ActionResult.fail("Dit bod is niet meer geldig.");
+        if (b.raised) return ActionResult.fail(b.buyerName() + " heeft al verhoogd: dit is het laatste bod.");
+        if (rng.nextDouble() < 0.5) {
+            long old = b.amount;
+            long raisedAmount = Math.round(b.amount * (1.08 + rng.nextDouble() * 0.12) / 500.0) * 500;
+            b.amount = Math.max(old + 500, raisedAmount); // ook bij kleine bedragen een echte verhoging
+            b.raised = true;
+            return ActionResult.ok(b.buyerName() + " verhoogt van " + Fmt.money(old) + " naar " + Fmt.money(b.amount) + ".");
+        }
+        bids().remove(b);
+        return ActionResult.fail(b.buyerName() + " haakt af.");
+    }
+
+    public ActionResult rejectBid(TransferBid b) {
+        if (!bids().remove(b)) return ActionResult.fail("Dit bod is niet meer geldig.");
+        if (b.player.transferRequested && human.squad.contains(b.player)) {
+            b.player.moraleDelta -= 5; // hij wilde juist weg
+            return ActionResult.ok("Bod afgewezen. " + b.player.name + " baalt: hij wilde graag weg.");
+        }
+        return ActionResult.ok("Bod afgewezen.");
+    }
+
+    /** Wekelijks: verlopen biedingen opruimen en soms een ongevraagd bod op een van je toppers. */
+    private void weeklyBids(WeekReport rep) {
+        int key = weekKey();
+        bids().removeIf(b -> b.expiresWeekKey < key || !human.squad.contains(b.player));
+        List<Player> candidates = new ArrayList<>();
+        for (Player p : human.squad) {
+            if (p.age > 32) continue;
+            boolean already = false;
+            for (TransferBid b : bids()) if (b.player == p && !b.solicited) already = true;
+            if (!already) candidates.add(p);
+        }
+        if (candidates.isEmpty()) return;
+        candidates.sort((a, b) -> Long.compare(b.value(), a.value()));
+        List<Player> top = new ArrayList<>(candidates.subList(0, Math.min(5, candidates.size())));
+        for (Player p : candidates) if (p.transferRequested && !top.contains(p)) top.add(p);
+        for (Player p : top) {
+            double chance = p.transferRequested ? 0.25 : 0.04;
+            if (rng.nextDouble() >= chance) continue;
+            long amount = offerAmount(p, 0.85, 1.3);
+            Club buyer = null;
+            List<Club> options = new ArrayList<>();
+            for (int lvl = Math.max(1, human.level - 2); lvl <= human.level; lvl++) {
+                for (Club c : division(lvl).clubs) if (!c.human && c.money >= amount * 1.1) options.add(c);
+            }
+            if (!options.isEmpty()) buyer = options.get(rng.nextInt(options.size()));
+            TransferBid b = new TransferBid(p, buyer, amount, false, key + 1);
+            bids().add(b);
+            String msg = b.buyerName() + " biedt " + Fmt.money(amount) + " op " + p.name + ". Het bod geldt twee weken.";
+            addNews(msg);
+            rep.messages.add(msg);
+        }
     }
 
     /** Een club uit dezelfde of een hogere divisie die het bedrag kan betalen; null = buitenland. */
@@ -818,6 +1016,7 @@ public class Game implements Serializable {
 
     private void completeSale(Player p, Club buyer, long price) {
         human.squad.remove(p);
+        bids().removeIf(b -> b.player == p);
         if (human.favorite() == null && human.favoriteId == p.id) human.favoriteId = 0;
         if (buyer != null) {
             p.contractYears = 2 + rng.nextInt(2);
